@@ -14,7 +14,7 @@ def home(lang: str = "en") -> InlineKeyboardMarkup:
     return builder.as_markup()
 
 
-def results(items: list[dict], page: int) -> InlineKeyboardMarkup:
+def results(items: list[dict], page: int, has_next: bool = True) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     for item in items:
         builder.button(text=f"🎬 {item['title'][:48]}", callback_data=f"movie:{item['identifier']}")
@@ -22,7 +22,7 @@ def results(items: list[dict], page: int) -> InlineKeyboardMarkup:
     nav = []
     if page > 0:
         nav.append(InlineKeyboardButton(text="⬅️ Previous", callback_data=f"page:{page-1}"))
-    if len(items) > 0:
+    if has_next:
         nav.append(InlineKeyboardButton(text="Next ➡️", callback_data=f"page:{page+1}"))
     if nav:
         builder.row(*nav)
