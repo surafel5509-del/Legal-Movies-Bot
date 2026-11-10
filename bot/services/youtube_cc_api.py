@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import re
 from urllib.parse import quote
 
@@ -9,6 +10,7 @@ from bot.config import settings
 YOUTUBE_LICENSE_URL = "https://support.google.com/youtube/answer/2797468"
 YOUTUBE_CC_LABEL = "YouTube Creative Commons Attribution (uploader-declared)"
 MIN_DURATION_SECONDS = 20 * 60
+logger = logging.getLogger(__name__)
 
 
 def is_youtube_cc_license(value: object) -> bool:
@@ -52,7 +54,8 @@ class YouTubeCCCatalog:
             return []
         try:
             return await asyncio.to_thread(self._search_sync, query, limit)
-        except Exception:
+        except Exception as exc:
+            logger.warning("YouTube CC search unavailable: %s", exc)
             return []
 
     def _search_sync(self, query: str, limit: int) -> list[dict]:
