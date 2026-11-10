@@ -227,5 +227,8 @@ class MultiSourceCatalog:
                 "resolution": None, "file_size": _size(info.get("size")),
                 "download_url": media_url, "codec": None,
             }],
-            "raw": {\n                "source": "Wikimedia Commons",\n                "author": _text((ext.get("Artist") or {}).get("value") or (ext.get("Credit") or {}).get("value")),\n            },
+            "raw": {
+                "source": "Wikimedia Commons",
+                "author": _text((ext.get("Artist") or {}).get("value") or (ext.get("Credit") or {}).get("value")),
+            },
         }
