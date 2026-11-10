@@ -93,7 +93,7 @@ async def tmdb_movie_details(callback: CallbackQuery, tmdb):
     try:
         movie_id = int(callback.data.split(":", 1)[1])
         data = await tmdb.movie_details(movie_id)
-    except (ValueError, Exception):
+    except Exception:
         data = None
     if not data:
         await callback.answer("Movie information is temporarily unavailable.", show_alert=True)
