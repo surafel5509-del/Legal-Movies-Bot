@@ -15,6 +15,8 @@ DETAIL_URL = "https://archive.org/metadata/{identifier}"
 
 
 class ArchiveAPI:
+    """Internet Archive movie discovery with broad matching and a strict rights gate."""
+
     def __init__(self, session: aiohttp.ClientSession):
         self.http = session
         self._cache: dict[tuple[str, int], tuple[float, list[dict]]] = {}
@@ -32,45 +34,72 @@ class ArchiveAPI:
                     raise
                 await asyncio.sleep(0.4 * (attempt + 1))
 
+    async def _search_docs(self, expression: str, page: int) -> list[dict]:
+        params = {
+            "q": expression,
+            "fl[]": ["identifier", "title", "year", "description", "licenseurl", "publicdate", "downloads"],
+            "sort[]": "downloads desc",
+            "rows": str(max(25, min(100, settings.archive_page_size * 5))),
+            "page": str(page + 1),
+            "output": "json",
+        }
+        payload = await self._json(ADVANCED_URL, params=params)
+        return payload.get("response", {}).get("docs", [])
+
     async def search(self, query: str, page: int = 0) -> list[dict]:
+        """Search phrase, all title terms, then individual title terms; show only licensed results."""
         query = re.sub(r"[^\w\s'-]", " ", query, flags=re.UNICODE).strip()[:100]
+        query = re.sub(r"\s+", " ", query)
         if not query:
             return []
+        page = max(0, page)
         key = (query.casefold(), page)
         async with self._lock:
             cached = self._cache.get(key)
             if cached and cached[0] > asyncio.get_running_loop().time():
                 return cached[1]
-        escaped = query.replace('"', '')
-        params = {
-            "q": f'mediatype:movies AND (title:"{escaped}" OR description:"{escaped}")',
-            "fl[]": ["identifier", "title", "year", "description", "licenseurl", "publicdate"],
-            "sort[]": "downloads desc",
-            "rows": str(settings.archive_page_size),
-            "page": str(page + 1),
-            "output": "json",
-        }
-        payload = await self._json(ADVANCED_URL, params=params)
-        docs = payload.get("response", {}).get("docs", [])
-        results: list[dict] = []
-        seen: set[str] = set()
-        for doc in docs:
-            identifier = str(doc.get("identifier", ""))
-            if not identifier or identifier in seen:
+
+        phrase = _lucene_phrase(query)
+        terms = [term for term in re.findall(r"[\w'-]+", query, flags=re.UNICODE) if len(term) > 1]
+        strategies = [f'mediatype:movies AND (title:"{phrase}" OR description:"{phrase}")']
+        if len(terms) > 1:
+            all_terms = " AND ".join(f'title:{_lucene_term(term)}' for term in terms)
+            strategies.append(f"mediatype:movies AND ({all_terms})")
+        if terms:
+            any_terms = " OR ".join(f'title:{_lucene_term(term)}' for term in terms)
+            strategies.append(f"mediatype:movies AND ({any_terms})")
+
+        docs_by_id: dict[str, dict] = {}
+        for expression in strategies:
+            try:
+                for doc in await self._search_docs(expression, page):
+                    identifier = str(doc.get("identifier") or "").strip()
+                    if identifier:
+                        docs_by_id.setdefault(identifier, doc)
+            except (aiohttp.ClientError, asyncio.TimeoutError, ValueError):
+                # One discovery strategy failing should not discard results from another.
                 continue
-            seen.add(identifier)
+
+        query_terms = {term.casefold() for term in terms}
+        ranked: list[tuple[int, int, dict]] = []
+        for doc in docs_by_id.values():
             rights_ok, license_label, license_url = verify_archive_rights(doc)
             if not rights_ok:
                 continue
-            results.append({
-                "identifier": identifier,
-                "title": str(doc.get("title") or identifier)[:500],
+            title = str(doc.get("title") or doc.get("identifier") or "")
+            score = _match_score(query, query_terms, title, _plain(doc.get("description")))
+            ranked.append((score, _int_or_none(doc.get("downloads")) or 0, {
+                "identifier": str(doc["identifier"]),
+                "title": title[:500],
                 "year": _year(doc.get("year")),
                 "description": _plain(doc.get("description")),
                 "license": license_label,
                 "license_url": license_url,
-                "source_url": f"https://archive.org/details/{quote(identifier)}",
-            })
+                "source_url": f"https://archive.org/details/{quote(str(doc['identifier']))}",
+            }))
+        ranked.sort(key=lambda row: (row[0], row[1]), reverse=True)
+        start = page * settings.archive_page_size
+        results = [item for _, _, item in ranked[start:start + settings.archive_page_size]]
         async with self._lock:
             self._cache[key] = (asyncio.get_running_loop().time() + settings.cache_ttl_seconds, results)
         return results
@@ -114,6 +143,28 @@ class ArchiveAPI:
             "files": selected,
             "raw": {k: v for k, v in metadata.items() if k not in {"identifier"}},
         }
+
+
+def _lucene_phrase(value: str) -> str:
+    return re.sub(r'([+\-!(){}\[\]^"~*?:\\/])', r"\\\1", value)
+
+
+def _lucene_term(value: str) -> str:
+    return re.sub(r'([+\-!(){}\[\]^"~*?:\\/])', r"\\\1", value)
+
+
+def _match_score(query: str, terms: set[str], title: str, description: str) -> int:
+    normalized_title = re.sub(r"[^\w]+", " ", title.casefold()).strip()
+    normalized_query = re.sub(r"[^\w]+", " ", query.casefold()).strip()
+    title_terms = set(normalized_title.split())
+    score = len(terms & title_terms) * 10
+    if normalized_query and normalized_query in normalized_title:
+        score += 100
+    elif normalized_title and normalized_title in normalized_query:
+        score += 35
+    description_terms = set(re.sub(r"[^\w]+", " ", description.casefold()).split())
+    score += len(terms & description_terms)
+    return score
 
 
 def _year(value: Any) -> int | None:
