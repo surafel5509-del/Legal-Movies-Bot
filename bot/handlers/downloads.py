@@ -1,4 +1,5 @@
 import logging
+from pathlib import Path
 
 from aiogram import F, Router
 from aiogram.types import CallbackQuery
@@ -97,8 +98,9 @@ async def download_movie(callback: CallbackQuery, downloads: DownloadManager, ar
         path = await downloads.fetch(
             file_data["url"], file_data["filename"], expected_license=file_data["license"]
         )
+        upload_filename = Path(file_data["filename"]).stem + path.suffix
         sent = await callback.message.answer_document(
-            downloads.input_file(path, file_data["filename"]),
+            downloads.input_file(path, upload_filename),
             caption=f"🎬 {file_data['movie_title']}\nLicense: {file_data['license']}",
         )
         telegram_file_id = sent.document.file_id if sent.document else None
