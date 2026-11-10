@@ -44,7 +44,7 @@ async def home_callback(callback: CallbackQuery, state: FSMContext):
 
 @router.callback_query(F.data == "nav:help")
 async def help_callback(callback: CallbackQuery):
-    await callback.message.answer("Search by title. Results can come from Internet Archive, Library of Congress, Wikimedia Commons and YouTube CC. Only explicit CC0, Public Domain Mark, CC BY or CC BY-SA licenses are eligible. A Telegram upload is attempted only below the configured size cap.")
+    await callback.message.answer("Search by title. Results can come from Internet Archive, Library of Congress, Wikimedia Commons and YouTube CC. Only supported CC0, Public Domain Mark, CC BY/CC BY-SA, explicit LOC public-domain statements and YouTube CC Attribution records are eligible. A Telegram upload is attempted only below the configured size cap.")
     await callback.answer()
 
 
