@@ -30,10 +30,21 @@ def results(items: list[dict], page: int) -> InlineKeyboardMarkup:
     return builder.as_markup()
 
 
-def movie_actions(identifier: str, file_ids: list[int], favorite: bool = False) -> InlineKeyboardMarkup:
+def movie_actions(identifier: str, files: list[dict], favorite: bool = False) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
-    for file_id in file_ids:
-        builder.button(text=f"⬇️ Download option {file_id}", callback_data=f"download:{identifier}:{file_id}")
+    for movie_file in files:
+        file_id = movie_file["id"]
+        fmt = str(movie_file.get("format") or "VIDEO").upper()
+        quality = movie_file.get("resolution") or "quality n/a"
+        size = movie_file.get("file_size")
+        size_label = f"{size / (1024 * 1024):.0f} MB" if size else "size n/a"
+        builder.button(
+            text=f"⬇️ Send {fmt} · {quality} · {size_label}"[:60],
+            callback_data=f"download:{identifier}:{file_id}",
+        )
+        direct_url = movie_file.get("download_url")
+        if direct_url:
+            builder.button(text=f"🌐 Direct {fmt} download", url=direct_url)
     builder.button(text="❤️ Remove favorite" if favorite else "❤️ Add favorite", callback_data=f"favorite:{identifier}")
     builder.button(text="⬅️ Search", callback_data="nav:search")
     builder.adjust(1)
