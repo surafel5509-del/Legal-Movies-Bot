@@ -1,34 +1,41 @@
 # Legal Movie Bot
 
-A Telegram movie discovery and legal-download bot built with Python 3.11+, aiogram 3 and SQLAlchemy async.
+A Telegram movie discovery and legal-download bot built with Python 3.11+, aiogram 3, SQLAlchemy async and yt-dlp.
 
 ## Features
 
-- Broad movie search and metadata, posters, synopsis, trailers and regional official watch options via TMDB.
-- Search across Internet Archive, Library of Congress film/video records and Wikimedia Commons media.
-- A unified conservative rights gate: only explicit CC0, Public Domain Mark, CC BY and CC BY-SA license URLs are eligible for automated direct delivery.
-- Exact normalized title-and-year matching for TMDB download checks.
-- Telegram document delivery for supported files below the configured upload cap; oversized files link to their authorized source record.
+- TMDB movie discovery, metadata, posters, trailers and regional official watch options.
+- Search across Internet Archive, Library of Congress, Wikimedia Commons and YouTube videos explicitly marked Creative Commons Attribution.
+- Direct Telegram delivery for source files that pass a fresh rights check and fit the configured upload cap.
+- Source-specific metadata verification before displaying a download and again when the user presses Download.
+- Strict URL/redirect allowlists, bounded streaming and upload-size checks.
 - Favorites, Amharic/English navigation, search history and admin tools.
 
 ## Configure
 
-Set `BOT_TOKEN`, `ADMIN_IDS`, and `DATABASE_URL`. For broad movie discovery, obtain a TMDB API key at https://www.themoviedb.org/settings/api and set:
+Set `BOT_TOKEN`, `ADMIN_IDS`, and `DATABASE_URL`. For broad movie discovery, set a TMDB API key:
 
 - `TMDB_API_KEY` — optional; without it, TMDB discovery, trailers and official provider metadata are unavailable.
-- `TMDB_WATCH_REGION` — two-letter region for watch-provider lookup (set to `ET` for Ethiopia).
+- `TMDB_WATCH_REGION` — two-letter region for watch-provider lookup (for example `ET`).
 - `MAX_UPLOAD_BYTES` — Telegram upload cap; defaults to 49 MiB.
 - `ARCHIVE_PAGE_SIZE`, `CACHE_TTL_SECONDS`, `REQUEST_TIMEOUT_SECONDS` — catalog tuning.
 
-Internet Archive, Library of Congress and Wikimedia Commons public search/metadata endpoints do not require paid API keys.
+Internet Archive, Library of Congress and Wikimedia Commons public metadata APIs do not require paid keys. YouTube discovery/download uses the free open-source `yt-dlp` Python package; no YouTube API key is configured.
 
-## Legal download policy
+## Sources and rights policy
 
-TMDB is a metadata and watch-provider discovery service. It does not provide movie files or grant redistribution rights. Internet Archive, Library of Congress and Wikimedia Commons are source catalogs, not blanket redistribution licenses. This bot only offers direct files when the item's own metadata exposes an explicit allowlisted CC0, Public Domain Mark, CC BY or CC BY-SA license URL. Statements such as "no known restrictions", missing rights fields and non-allowlisted licenses are excluded. The license is revalidated before delivery.
+- **Internet Archive:** item metadata must expose an allowlisted CC0, Public Domain Mark, CC BY or CC BY-SA URL.
+- **Library of Congress:** automated delivery requires an explicit supported Creative Commons URL or an item-level rights statement explicitly identifying the work as public domain. "No known copyright restrictions" by itself is not treated as a redistribution license.
+- **Wikimedia Commons:** the file page must expose an allowlisted license URL and a trusted Wikimedia file URL.
+- **YouTube:** only videos whose current extractor metadata explicitly declares the Creative Commons Attribution license are eligible. Standard YouTube-licensed videos are rejected. The uploader's declaration is not an independent proof of ownership; the source page and attribution are shown.
 
-For TMDB titles, the bot requires an exact normalized title-and-year match, then fetches item details and verifies the license again before offering files. Automated checks cannot prove uploader ownership or chain of title; human review and a takedown process are still required. Never bypass rights checks, DRM or paid streaming services. Copyrighted commercial titles such as many current studio releases will generally have official watch/rent/buy links, not a free downloadable copy.
+TMDB is a metadata and watch-provider discovery service. It does not provide movie files or grant redistribution rights. A source catalog is not a blanket license. The bot fetches source metadata again immediately before delivery and verifies the exact file URL, filename and license have not changed. It does not bypass DRM, paid streaming or access restrictions.
 
-Downloads are restricted to HTTPS URLs on known source domains. Redirects are checked hop by hop, files are streamed under a strict byte cap, and unsupported/oversized files are not sent to Telegram.
+Automated rights checks cannot prove chain of title. Commercial copyrighted films such as many studio releases will generally have official watch/rent/buy options, not a free downloadable copy. The bot must never promise a legal free download when the source does not grant redistribution rights.
+
+## Download behavior
+
+Direct files are restricted to HTTPS URLs on known source domains. Redirects are checked hop by hop. Files are streamed to temporary storage under a strict byte cap. YouTube videos are downloaded using yt-dlp only after a fresh CC license check, with a second license check inside the downloader. Unsupported or oversized files are not sent to Telegram. Temporary files are removed after delivery.
 
 ## Local setup
 

@@ -44,13 +44,26 @@ async def save_movie(session, data: dict) -> Movie:
     movie.metadata_json = json.dumps(data.get("raw", {}), ensure_ascii=False, default=str)
     await session.flush()
 
-    # Query existing filenames explicitly. Accessing movie.files on a newly
-    # inserted object triggers an async lazy load outside SQLAlchemy's greenlet.
-    existing = set((await session.scalars(
-        select(MovieFile.filename).where(MovieFile.movie_id == movie.id)
+    # Refresh existing file records because source URLs and metadata can change.
+    # Remove retired options so stale download buttons cannot target old files.
+    existing_rows = list((await session.scalars(
+        select(MovieFile).where(MovieFile.movie_id == movie.id)
     )).all())
-    for file_data in data.get("files", []):
-        if file_data["filename"] not in existing:
+    existing = {row.filename: row for row in existing_rows}
+    incoming = {item["filename"]: item for item in data.get("files", [])}
+    for filename, row in existing.items():
+        if filename not in incoming:
+            await session.delete(row)
+            continue
+        file_data = incoming[filename]
+        url_changed = row.download_url != file_data["download_url"]
+        for key in ("format", "resolution", "file_size", "download_url", "codec"):
+            if key in file_data:
+                setattr(row, key, file_data[key])
+        if url_changed:
+            row.telegram_file_id = None
+    for filename, file_data in incoming.items():
+        if filename not in existing:
             session.add(MovieFile(movie_id=movie.id, **file_data))
     await session.flush()
     return movie

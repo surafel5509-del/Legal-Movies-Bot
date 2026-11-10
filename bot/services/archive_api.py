@@ -42,7 +42,6 @@ class ArchiveAPI:
             cached = self._cache.get(key)
             if cached and cached[0] > asyncio.get_running_loop().time():
                 return cached[1]
-        escaped = query.replace('"', '')
         params = {
             "q": _build_search_query(query),
             "fl[]": ["identifier", "title", "year", "description", "licenseurl", "rights", "publicdate", "downloads", "genre", "language"],
@@ -145,7 +144,7 @@ def _build_search_query(query: str) -> str:
     if not terms:
         return "mediatype:movies"
     phrase = " ".join(terms)
-    all_terms = " AND ".join(f'"{term}"' for term in terms)
+    all_terms = " AND ".join(terms)
     return (
         "mediatype:movies AND ("
         f'title:"{phrase}" OR title:({all_terms}) OR description:({all_terms})'
