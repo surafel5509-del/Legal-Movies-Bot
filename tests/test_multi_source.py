@@ -56,7 +56,7 @@ async def test_commons_details_refetches_license_and_media_metadata(monkeypatch)
     result = await api.details("commons:42")
     assert result["title"] == "Example Film (1936)"
     assert result["year"] == 1936
-    assert result["license"] == "CC BY 4.0"
+    assert result["license"] == "CC BY-SA 4.0"
     assert result["files"][0]["download_url"].startswith("https://upload.wikimedia.org/")
 
 
