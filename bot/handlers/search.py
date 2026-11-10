@@ -1,7 +1,7 @@
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import CallbackQuery, InputMediaPhoto, Message
 
 from bot.config import settings
 from bot.database.db import Session
@@ -61,13 +61,47 @@ async def _show_results(message, state, archive, query: str, page: int, actor=No
             await record_search(session, user, query)
         await session.commit()
     if not items:
-        await message.answer("No movies with a currently recognized redistribution license were found. Try a shorter title or another spelling.")
+        await message.answer(
+            "No movies with a currently recognized redistribution license were found. "
+            "Try a shorter title or another spelling."
+        )
         return
 
     def escape_html(value: object) -> str:
         return str(value).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
-    text = "<b>Verified catalog matches</b>\nOnly entries with an allowlisted explicit license are shown.\n\n" + "\n".join(
-        f"• {escape_html(item['title'])}" + (f" ({item['year']})" if item.get("year") else "") for item in items
+    # Telegram accepts up to 10 photos in one media group. Send poster albums first,
+    # then a compact button list so every result has a reliable Details / Download action.
+    poster_items = [item for item in items if item.get("poster_url")]
+    for offset in range(0, len(poster_items), 10):
+        batch = poster_items[offset:offset + 10]
+        media = []
+        for item in batch:
+            title = escape_html(item["title"])
+            year = f" · {item['year']}" if item.get("year") else ""
+            description = escape_html((item.get("description") or "")[:220])
+            caption = f"<b>{title}</b>{year}"
+            if description:
+                caption += f"\n{description}"
+            media.append(InputMediaPhoto(media=item["poster_url"], caption=caption, parse_mode="HTML"))
+        try:
+            await message.answer_media_group(media=media)
+        except Exception:
+            # A single missing thumbnail can make a whole album fail; retry posters individually.
+            for item in batch:
+                try:
+                    title = escape_html(item["title"])
+                    year = f" · {item['year']}" if item.get("year") else ""
+                    await message.answer_photo(
+                        item["poster_url"],
+                        caption=f"<b>{title}</b>{year}",
+                        parse_mode="HTML",
+                    )
+                except Exception:
+                    continue
+
+    await message.answer(
+        f"<b>{len(items)} verified movie matches</b>\nChoose a title below to see its available files and download buttons.",
+        reply_markup=results(items, page),
+        parse_mode="HTML",
     )
-    await message.answer(text, reply_markup=results(items, page), parse_mode="HTML")
