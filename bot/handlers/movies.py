@@ -93,8 +93,8 @@ def _candidate_title_key(value: str, identifier: str) -> str:
     # CC video uploads often append release years and generic labels to the
     # title. Strip only those known suffixes; retain the actual title words.
     if identifier.startswith("youtube:"):
-        value = re.sub(r"\\b(?:18|19|20)\\d{2}\\b", " ", value or "")
-        value = re.sub(r"\\b(?:full|complete)\\s+(?:movie|film)\\b", " ", value, flags=re.IGNORECASE)
+        value = re.sub(r"\b(?:18|19|20)\d{2}\b", " ", value or "")
+        value = re.sub(r"\b(?:full|complete)\s+(?:movie|film)\b", " ", value, flags=re.IGNORECASE)
     return _normalized_title(value)
 
 
