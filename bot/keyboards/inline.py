@@ -30,6 +30,15 @@ def results(items: list[dict], page: int, has_next: bool = True) -> InlineKeyboa
     return builder.as_markup()
 
 
+def metadata_results(items: list[dict]) -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    for item in items:
+        year = f" ({item['year']})" if item.get("year") else ""
+        builder.button(text=f"🎞 {item['title'][:42]}{year}"[:60], callback_data=f"tmdb:{item['id']}")
+    builder.adjust(1)
+    return builder.as_markup()
+
+
 def movie_actions(identifier: str, file_ids: list[int], favorite: bool = False) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     for file_id in file_ids:

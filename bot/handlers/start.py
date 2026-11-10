@@ -50,7 +50,7 @@ async def help_callback(callback: CallbackQuery):
 
 @router.callback_query(F.data == "nav:about")
 async def about_callback(callback: CallbackQuery):
-    await callback.message.answer("Legal Movie Bot is a movie-only discovery bot. Initial catalog: Internet Archive. License checks are conservative and automated; metadata can still be inaccurate, so always review the linked license and source record.")
+    await callback.message.answer("Legal Movie Bot discovers movie information using TMDB and searches Internet Archive for files with an explicit redistribution license. TMDB data and images are used under its API terms. This product uses the TMDB API but is not endorsed or certified by TMDB. TMDB does not provide movie files or download rights. Always review each source license.")
     await callback.answer()
 
 

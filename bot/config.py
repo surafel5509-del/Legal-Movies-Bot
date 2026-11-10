@@ -23,6 +23,8 @@ class Settings:
     temp_dir: Path = Path("/tmp/legal-movie-bot")
     catalog_enabled: bool = True
     active_days: int = 30
+    tmdb_api_key: str = ""
+    tmdb_watch_region: str = "US"
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -50,6 +52,8 @@ class Settings:
             temp_dir=Path(os.getenv("TEMP_DIR", "/tmp/legal-movie-bot")),
             catalog_enabled=os.getenv("ARCHIVE_CATALOG_ENABLED", "true").lower() in {"1", "true", "yes"},
             active_days=max(1, int(os.getenv("ACTIVE_DAYS", "30"))),
+            tmdb_api_key=os.getenv("TMDB_API_KEY", "").strip(),
+            tmdb_watch_region=os.getenv("TMDB_WATCH_REGION", "US").strip().upper()[:2] or "US",
         )
 
 
