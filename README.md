@@ -6,11 +6,11 @@ A movie-only Telegram search bot built with Python 3.11+, aiogram 3, SQLAlchemy 
 
 - `/start` welcome screen, inline navigation, Help and About.
 - English and Amharic welcome/navigation labels; per-user language preference.
-- Internet Archive movie discovery with phrase, all-title-term, and individual-title-term search passes; title-first relevance ranking, pagination, deduplication, in-memory TTL cache, retry and timeout handling. Search results remain restricted to explicitly allowlisted redistribution licenses.
+- Internet Archive movie discovery with phrase, all-title-term, and individual-title-term search passes; title-first relevance ranking, 15 results per page by default, pagination, deduplication, in-memory TTL cache, retry and timeout handling. Search results include Archive poster thumbnails and remain restricted to explicitly allowlisted redistribution licenses.
 - Movie details sourced from Archive metadata: title, year, description, genre, language, poster, license, source page and available MP4/WebM/M4V/OGV files.
 - Conservative license allowlist: CC0, Public Domain Mark, CC BY and CC BY-SA versions 1.0–4.0. License checks run during search and again during metadata retrieval.
-- Direct document delivery for files within `MAX_UPLOAD_BYTES`, streamed to a temporary file (not loaded fully into memory); Telegram `file_id` is cached and reused.
-- Oversized files are not transferred; users receive the authorized Archive item page and a clear size-limit message.
+- One-tap Telegram document delivery for authorized files within the safe 47 MiB cap, streamed to a temporary file (not loaded fully into memory); Telegram `file_id` is cached and reused.
+- Each available file has a clearly labeled Telegram-send button and a direct Archive download link. Oversized files are not uploaded through Telegram; users get a direct authorized file link instead.
 - Favorites, recently added and popular completed downloads.
 - Admin-only `/admin` statistics and `/broadcast` announcements.
 - Rate limiting, configured admin IDs, environment-based secrets, structured logs, async SQLite/PostgreSQL support, and `/health` endpoint.
@@ -50,9 +50,9 @@ The default SQLite database is `./data/bot.db`. The application creates its sche
 | `ADMIN_IDS` | Comma-separated Telegram numeric IDs | empty |
 | `DATABASE_URL` | SQLAlchemy async database URL | `sqlite+aiosqlite:///./data/bot.db` |
 | `LOG_LEVEL` | Python log level | `INFO` |
-| `MAX_UPLOAD_BYTES` | Hard cap for Telegram document uploads | 49 MiB |
+| `MAX_UPLOAD_BYTES` | Hard cap for Telegram document uploads (clamped to 47 MiB) | 47 MiB |
 | `MAX_CONCURRENT_DOWNLOADS` | Concurrent file transfers | `2` |
-| `ARCHIVE_PAGE_SIZE` | Archive search page size (1–50) | `10` |
+| `ARCHIVE_PAGE_SIZE` | Archive search page size (1–30) | `15` |
 | `CACHE_TTL_SECONDS` | Search cache TTL | `600` |
 | `REQUEST_TIMEOUT_SECONDS` | Archive API timeout | `25` |
 | `TEMP_DIR` | Temporary download directory | `/tmp/legal-movie-bot` |
@@ -94,8 +94,8 @@ GitHub Actions runs compile checks and the test suite on Python 3.11, 3.12 and 3
 - Search uses Internet Archive's indexed metadata; it cannot guarantee that every film exists in that catalog. Results can vary as the Archive index changes. Spelling correction, multilingual title translation, and a separate commercial-film metadata provider are not configured.
 - Movie metadata availability varies; runtime, codec, quality and language may be absent. The bot never invents these values. Resolution is inferred only when encoded in the filename; codec is left unknown.
 - The Archive search endpoint may omit license metadata for some records; such records are intentionally excluded even if their item page may show a license.
-- The bot sends files only up to its configured upload cap. Actual Telegram Bot API limits can change; tune `MAX_UPLOAD_BYTES` conservatively for the Bot API endpoint in use.
-- Download progress bars are not shown because aiogram upload callbacks depend on the exact transport behavior; users receive a preparation notice and a completion message only after Telegram accepts the file.
+- The bot sends files only up to 47 MiB, below the standard Bot API 50 MB upload ceiling; larger authorized files are linked directly to the Archive source.
+- Poster thumbnails depend on the Archive item image service; if an item has no usable poster, its title and detail/download controls are still shown.
 - The in-memory search cache is per process; no distributed cache is configured.
 - Admin feature/category management, admin UI source controls, recommendation ranking, category browse screens, detailed recent activity/error views, and robust search-history screens remain future work.
 - Automated tests do not yet cover live Telegram startup, a full mocked API-to-database search flow, database CRUD against PostgreSQL, or a full Telegram upload. Validate these in a staging bot before public launch.
