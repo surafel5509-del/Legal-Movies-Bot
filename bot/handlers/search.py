@@ -1,3 +1,5 @@
+import logging
+
 from aiogram import F, Router
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
@@ -10,6 +12,7 @@ from bot.keyboards.inline import results
 from bot.services.catalog import get_or_create_user, record_search
 
 router = Router()
+logger = logging.getLogger(__name__)
 
 
 class SearchState(StatesGroup):
@@ -67,7 +70,8 @@ async def _show_results(message, state, archive, tmdb, query: str, page: int, ac
     if settings.catalog_enabled:
         try:
             items = await archive.search(query, page)
-        except Exception:
+        except Exception as exc:
+            logger.exception("Legal catalog search failed: %s", exc)
             items = []
     tmdb_items = []
     if tmdb:
@@ -81,7 +85,7 @@ async def _show_results(message, state, archive, tmdb, query: str, page: int, ac
             await record_search(session, user, query)
         await session.commit()
     if not items and not tmdb_items:
-        await message.answer("No matching titles found. Try fewer words or another spelling. Configure TMDB_API_KEY for broad movie discovery; direct downloads remain limited to verified licensed catalog items.")
+        await message.answer("No legal downloadable matches were found, or the free catalogs are temporarily unavailable. Try a shorter title, or use /help to see supported sources.")
         return
 
     def escape_html(value: object) -> str:
