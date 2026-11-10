@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import re
 from urllib.parse import quote, unquote, urlparse
 
@@ -9,7 +10,9 @@ import aiohttp
 from bot.config import settings
 from bot.services.archive_api import ArchiveAPI
 from bot.services.license_verification import verify_archive_rights
+from bot.services.youtube_cc_api import YouTubeCCCatalog
 
+logger = logging.getLogger(__name__)
 LOC_SEARCH = "https://www.loc.gov/film-and-videos/"
 LOC_ITEM = "https://www.loc.gov/item/{identifier}/"
 COMMONS_API = "https://commons.wikimedia.org/w/api.php"
@@ -34,12 +37,28 @@ def _size(value) -> int | None:
         return None
 
 
+def _loc_rights(metadata: dict) -> tuple[bool, str | None, str | None]:
+    ok, label, url = verify_archive_rights({
+        "licenseurl": metadata.get("rights_url") or metadata.get("rights_url_s") or ""
+    })
+    if ok:
+        return ok, label, url
+    statement = " ".join(str(metadata.get(key) or "") for key in ("rights", "rights_statement", "access_restricted"))
+    normalized = re.sub(r"\s+", " ", statement).casefold()
+    if "public domain" in normalized and not any(
+        phrase in normalized for phrase in ("not public domain", "not in the public domain", "copyrighted")
+    ):
+        return True, "Public domain (Library of Congress rights statement)", "https://www.loc.gov/legal/"
+    return False, None, None
+
+
 class MultiSourceCatalog:
-    """Unified catalog; external sources require an explicit allowlisted CC/PD license URL."""
+    """Aggregate legal catalogs; every candidate is checked again before file delivery."""
 
     def __init__(self, session: aiohttp.ClientSession):
         self.http = session
         self.archive = ArchiveAPI(session)
+        self.youtube = YouTubeCCCatalog()
 
     async def _json(self, url: str, params: dict | None = None) -> dict:
         timeout = aiohttp.ClientTimeout(total=settings.request_timeout_seconds)
@@ -51,16 +70,23 @@ class MultiSourceCatalog:
         query = " ".join(str(query).split())[:100]
         if len(query) < 2:
             return []
-        results = await asyncio.gather(
-            self.archive.search(query, page),
-            self._search_loc(query, page),
-            self._search_commons(query, page),
-            return_exceptions=True,
+        sources = (
+            ("Internet Archive", self.archive.search(query, page)),
+            ("Library of Congress", self._search_loc(query, page)),
+            ("Wikimedia Commons", self._search_commons(query, page)),
+            ("YouTube CC", self.youtube.search(query, 5 if page == 0 else 0)),
         )
+        results = await asyncio.gather(*(task for _, task in sources), return_exceptions=True)
         merged: list[dict] = []
-        for result in results:
-            if isinstance(result, list):
+        failures = 0
+        for (name, _), result in zip(sources, results):
+            if isinstance(result, BaseException):
+                failures += 1
+                logger.warning("Movie catalog source %s failed: %s", name, result)
+            elif isinstance(result, list):
                 merged.extend(result)
+        if failures == len(sources):
+            raise RuntimeError("All movie catalog sources are unavailable")
         seen: set[str] = set()
         unique = []
         for item in merged:
@@ -76,6 +102,8 @@ class MultiSourceCatalog:
             return await self._loc_details(identifier[4:])
         if identifier.startswith("commons:"):
             return await self._commons_details(identifier[8:])
+        if identifier.startswith("youtube:"):
+            return await self.youtube.details(identifier)
         return await self.archive.details(identifier)
 
     async def _search_loc(self, query: str, page: int) -> list[dict]:
@@ -86,7 +114,7 @@ class MultiSourceCatalog:
             title = _text(doc.get("title"))
             if not identifier or not title:
                 continue
-            ok, label, canonical = verify_archive_rights({"licenseurl": doc.get("rights_url") or doc.get("rights")})
+            ok, label, canonical = _loc_rights(doc)
             if not ok:
                 continue
             output.append({
@@ -101,7 +129,7 @@ class MultiSourceCatalog:
         payload = await self._json(LOC_ITEM.format(identifier=quote(identifier)), {"fo": "json"})
         item = payload.get("item") or payload
         title = _text(item.get("title"))
-        ok, label, canonical = verify_archive_rights({"licenseurl": item.get("rights_url") or item.get("rights")})
+        ok, label, canonical = _loc_rights(item)
         if not title or not ok:
             return None
         files = []
