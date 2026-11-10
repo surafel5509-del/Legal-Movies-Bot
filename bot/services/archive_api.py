@@ -141,7 +141,7 @@ class ArchiveAPI:
 
 def _build_search_query(query: str) -> str:
     """Build a broad, bounded Archive search from sanitized title words."""
-    terms = re.findall(r"[\\w'-]+", query, flags=re.UNICODE)[:12]
+    terms = re.findall(r"[\w'-]+", query, flags=re.UNICODE)[:12]
     if not terms:
         return "mediatype:movies"
     phrase = " ".join(terms)
