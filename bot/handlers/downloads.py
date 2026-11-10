@@ -24,20 +24,19 @@ async def download_movie(callback: CallbackQuery, downloads: DownloadManager):
 
     async with Session() as session:
         movie_file = await session.scalar(
-            select(MovieFile)
-            .join(Movie)
+            select(MovieFile).join(Movie)
             .where(Movie.source_id == identifier, MovieFile.id == file_id)
             .options(selectinload(MovieFile.movie))
         )
         if not movie_file:
             await callback.answer("This file is no longer available.", show_alert=True)
             return
-        rights_ok, verified_label, verified_url = verify_archive_rights({"licenseurl": movie_file.movie.license_url})
-        if not rights_ok or verified_url != movie_file.movie.license_url or verified_label != movie_file.movie.license:
+        movie = movie_file.movie
+        rights_ok, verified_label, verified_url = verify_archive_rights({"licenseurl": movie.license_url})
+        if not rights_ok or verified_url != movie.license_url or verified_label != movie.license:
             await callback.answer("Rights verification failed; download blocked.", show_alert=True)
             return
         user = await get_or_create_user(session, callback.from_user)
-        movie = movie_file.movie
         if movie_file.telegram_file_id:
             try:
                 await callback.message.answer_document(
@@ -51,10 +50,9 @@ async def download_movie(callback: CallbackQuery, downloads: DownloadManager):
             except Exception:
                 movie_file.telegram_file_id = None
         file_data = {
-            "url": movie_file.download_url,
-            "filename": movie_file.filename,
-            "movie_title": movie.title,
-            "movie_id": movie.id,
+            "url": movie_file.download_url, "filename": movie_file.filename,
+            "movie_title": movie.title, "movie_id": movie.id,
+            "source_url": movie.source_url,
         }
         await record_download(session, user, movie, "started")
         await session.commit()
@@ -86,7 +84,7 @@ async def download_movie(callback: CallbackQuery, downloads: DownloadManager):
             await session.commit()
         size = f"{exc.size / (1024 * 1024):.1f} MB" if exc.size else "larger than the configured upload cap"
         await callback.message.answer(
-            f"This authorized file is {size}, above this bot's Telegram upload limit ({settings.max_upload_bytes / (1024 * 1024):.0f} MB). I have not uploaded it.\n\nOpen the authorized source page: https://archive.org/details/{identifier}",
+            f"This authorized file is {size}, above this bot's Telegram upload limit ({settings.max_upload_bytes / (1024 * 1024):.0f} MB). I have not uploaded it.\n\nOpen the authorized source page: {file_data['source_url']}",
             disable_web_page_preview=True,
         )
     except Exception:
@@ -97,7 +95,7 @@ async def download_movie(callback: CallbackQuery, downloads: DownloadManager):
                 await record_download(session, user, movie, "failed")
             await session.commit()
         await callback.message.answer(
-            f"The transfer failed. No download was sent. You can retry later or use the authorized source page: https://archive.org/details/{identifier}",
+            f"The transfer failed. No download was sent. You can retry later or use the authorized source page: {file_data['source_url']}",
             disable_web_page_preview=True,
         )
     finally:
