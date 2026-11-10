@@ -68,6 +68,9 @@ async def download_movie(callback: CallbackQuery, downloads: DownloadManager, ar
     ):
         await callback.answer("The source rights or file changed. Download blocked.", show_alert=True)
         return
+    file_data["metadata_json"] = json.dumps(current.get("raw") or {}, ensure_ascii=False, default=str)
+    file_data["source_url"] = current.get("source_url") or file_data["source_url"]
+    file_data["movie_title"] = current.get("title") or file_data["movie_title"]
 
     async with Session() as session:
         movie = await session.get(Movie, file_data["movie_id"])
