@@ -44,7 +44,7 @@ class ArchiveAPI:
         escaped = query.replace('"', '')
         params = {
             "q": f'mediatype:movies AND (title:"{escaped}" OR description:"{escaped}")',
-            "fl[]": ["identifier", "title", "year", "description", "licenseurl", "publicdate"],
+            "fl[]": ["identifier", "title", "year", "description", "licenseurl", "rights", "publicdate"],
             "sort[]": "downloads desc",
             "rows": str(settings.archive_page_size),
             "page": str(page + 1),
@@ -52,25 +52,47 @@ class ArchiveAPI:
         }
         payload = await self._json(ADVANCED_URL, params=params)
         docs = payload.get("response", {}).get("docs", [])
-        results: list[dict] = []
+        unique_docs: list[dict] = []
         seen: set[str] = set()
         for doc in docs:
-            identifier = str(doc.get("identifier", ""))
-            if not identifier or identifier in seen:
-                continue
-            seen.add(identifier)
-            rights_ok, license_label, license_url = verify_archive_rights(doc)
+            identifier = str(doc.get("identifier", "")).strip()
+            if identifier and identifier not in seen:
+                seen.add(identifier)
+                unique_docs.append(doc)
+
+        # The Advanced Search index can omit licenseurl even when the canonical
+        # item metadata contains it. Re-check only those candidates against the
+        # item's metadata API; never relax the rights allowlist.
+        semaphore = asyncio.Semaphore(5)
+
+        async def verified_result(doc: dict) -> dict | None:
+            identifier = str(doc["identifier"])
+            rights_doc = doc
+            if not doc.get("licenseurl") and not doc.get("license_url"):
+                async with semaphore:
+                    try:
+                        metadata_payload = await self._json(
+                            DETAIL_URL.format(identifier=quote(identifier, safe=""))
+                        )
+                    except (aiohttp.ClientError, asyncio.TimeoutError):
+                        return None
+                rights_doc = metadata_payload.get("metadata", {})
+            rights_ok, license_label, license_url = verify_archive_rights(rights_doc)
             if not rights_ok:
-                continue
-            results.append({
+                return None
+            metadata = rights_doc if rights_doc is not doc else {}
+            return {
                 "identifier": identifier,
-                "title": str(doc.get("title") or identifier)[:500],
-                "year": _year(doc.get("year")),
-                "description": _plain(doc.get("description")),
+                "title": str(doc.get("title") or metadata.get("title") or identifier)[:500],
+                "year": _year(doc.get("year") or metadata.get("year")),
+                "description": _plain(doc.get("description") or metadata.get("description")),
                 "license": license_label,
                 "license_url": license_url,
                 "source_url": f"https://archive.org/details/{quote(identifier)}",
-            })
+            }
+
+        verified = await asyncio.gather(*(verified_result(doc) for doc in unique_docs))
+        results = [item for item in verified if item is not None]
         async with self._lock:
             self._cache[key] = (asyncio.get_running_loop().time() + settings.cache_ttl_seconds, results)
         return results
