@@ -19,11 +19,11 @@ VIDEO_EXTENSIONS = (".mp4", ".webm", ".ogv", ".m4v", ".mov")
 def _text(value) -> str:
     if isinstance(value, list):
         value = " ".join(str(x) for x in value)
-    return re.sub(r"\\s+", " ", re.sub(r"<[^>]+>", " ", str(value or ""))).strip()[:3000]
+    return re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", str(value or ""))).strip()[:3000]
 
 
 def _year(value) -> int | None:
-    match = re.search(r"\\b(?:18|19|20)\\d{2}\\b", str(value or ""))
+    match = re.search(r"\b(?:18|19|20)\d{2}\b", str(value or ""))
     return int(match.group()) if match else None
 
 
@@ -35,13 +35,12 @@ def _size(value) -> int | None:
 
 
 class MultiSourceCatalog:
-    """Unified catalog. External sources are admitted only with an explicit allowlisted CC/PD license URL."""
+    """Unified catalog; external sources require an explicit allowlisted CC/PD license URL."""
 
     def __init__(self, session: aiohttp.ClientSession):
         self.http = session
         self.archive = ArchiveAPI(session)
         self._records: dict[str, dict] = {}
-        self._lock = asyncio.Lock()
 
     async def _json(self, url: str, params: dict | None = None) -> dict:
         timeout = aiohttp.ClientTimeout(total=settings.request_timeout_seconds)
@@ -53,12 +52,12 @@ class MultiSourceCatalog:
         query = " ".join(str(query).split())[:100]
         if len(query) < 2:
             return []
-        tasks = [
+        results = await asyncio.gather(
             self.archive.search(query, page),
             self._search_loc(query, page),
             self._search_commons(query, page),
-        ]
-        results = await asyncio.gather(*tasks, return_exceptions=True)
+            return_exceptions=True,
+        )
         merged: list[dict] = []
         for result in results:
             if isinstance(result, list):
@@ -81,37 +80,31 @@ class MultiSourceCatalog:
         return await self.archive.details(identifier)
 
     async def _search_loc(self, query: str, page: int) -> list[dict]:
-        payload = await self._json(LOC_SEARCH, {
-            "q": query, "fo": "json", "c": 20, "sp": page + 1,
-        })
-        docs = payload.get("results", [])
+        payload = await self._json(LOC_SEARCH, {"q": query, "fo": "json", "c": 20, "sp": page + 1})
         output = []
-        for doc in docs:
+        for doc in payload.get("results", []):
             identifier = str(doc.get("id") or "").rstrip("/").split("/")[-1]
             title = _text(doc.get("title"))
             if not identifier or not title:
                 continue
-            rights_url = str(doc.get("rights") or doc.get("rights_url") or "")
-            rights_ok, label, canonical = verify_archive_rights({"licenseurl": rights_url})
-            if not rights_ok:
+            ok, label, canonical = verify_archive_rights({"licenseurl": doc.get("rights") or doc.get("rights_url")})
+            if not ok:
                 continue
-            year = _year(doc.get("date") or doc.get("created_published"))
             record = {
-                "identifier": f"loc:{identifier}", "title": title, "year": year,
-                "description": _text(doc.get("description")),
-                "license": label, "license_url": canonical,
-                "source_url": doc.get("url") or LOC_ITEM.format(identifier=quote(identifier)),
+                "identifier": f"loc:{identifier}", "title": title,
+                "year": _year(doc.get("date") or doc.get("created_published")),
+                "description": _text(doc.get("description")), "license": label,
+                "license_url": canonical, "source_url": doc.get("url") or LOC_ITEM.format(identifier=quote(identifier)),
             }
             self._records[record["identifier"]] = record
             output.append(record)
         return output
 
     async def _loc_details(self, identifier: str) -> dict | None:
-        payload = await self._json(LOC_ITEM.format(identifier=quote(identifier)) , {"fo": "json"})
+        payload = await self._json(LOC_ITEM.format(identifier=quote(identifier)), {"fo": "json"})
         item = payload.get("item") or payload
         title = _text(item.get("title"))
-        rights_url = str(item.get("rights") or item.get("rights_url") or "")
-        ok, label, canonical = verify_archive_rights({"licenseurl": rights_url})
+        ok, label, canonical = verify_archive_rights({"licenseurl": item.get("rights") or item.get("rights_url")})
         if not title or not ok:
             return None
         files = []
@@ -119,7 +112,12 @@ class MultiSourceCatalog:
             url = str(resource.get("url") or "")
             name = unquote(url.split("?")[0].rsplit("/", 1)[-1])
             mime = str(resource.get("mimetype") or resource.get("mime_type") or "").lower()
-            if not url.startswith("https://") or not (mime.startswith("video/") or name.lower().endswith(VIDEO_EXTENSIONS)):
+            from urllib.parse import urlparse
+            host = (urlparse(url).hostname or "").lower()
+            trusted_host = host == "loc.gov" or host.endswith(".loc.gov")
+            if not trusted_host or urlparse(url).scheme != "https":
+                continue
+            if not (mime.startswith("video/") or name.lower().endswith(VIDEO_EXTENSIONS)):
                 continue
             files.append({
                 "filename": name[:500] or f"{identifier}.mp4",
@@ -129,10 +127,10 @@ class MultiSourceCatalog:
             })
         if not files:
             return None
-        year = _year(item.get("date") or item.get("created_published"))
         return {
             "identifier": f"loc:{identifier}", "title": title,
-            "description": _text(item.get("description")), "year": year,
+            "description": _text(item.get("description")),
+            "year": _year(item.get("date") or item.get("created_published")),
             "genre": None, "language": None, "poster_url": None,
             "license": label, "license_url": canonical,
             "source_url": item.get("url") or LOC_ITEM.format(identifier=quote(identifier)),
@@ -152,18 +150,23 @@ class MultiSourceCatalog:
             title = _text(page_data.get("title"))
             info = (page_data.get("imageinfo") or [{}])[0]
             ext = info.get("extmetadata") or {}
-            rights_url = str((ext.get("LicenseUrl") or {}).get("value") or "")
-            ok, label, canonical = verify_archive_rights({"licenseurl": rights_url})
+            ok, label, canonical = verify_archive_rights({
+                "licenseurl": (ext.get("LicenseUrl") or {}).get("value")
+            })
             media_url = str(info.get("url") or "")
-            if not ok or not media_url.startswith("https://") or not media_url.lower().split("?")[0].endswith(VIDEO_EXTENSIONS):
+            from urllib.parse import urlparse
+            host = (urlparse(media_url).hostname or "").lower()
+            if not ok or host != "upload.wikimedia.org" or urlparse(media_url).scheme != "https":
+                continue
+            if not media_url.lower().split("?")[0].endswith(VIDEO_EXTENSIONS):
                 continue
             identifier = str(page_data.get("pageid") or "")
             if not identifier:
                 continue
             year = _year((ext.get("DateTimeOriginal") or {}).get("value") or (ext.get("DateTime") or {}).get("value"))
             record = {
-                "identifier": f"commons:{identifier}", "title": title,
-                "year": year, "description": _text((ext.get("ImageDescription") or {}).get("value")),
+                "identifier": f"commons:{identifier}", "title": title, "year": year,
+                "description": _text((ext.get("ImageDescription") or {}).get("value")),
                 "license": label, "license_url": canonical,
                 "source_url": info.get("descriptionurl") or "https://commons.wikimedia.org/",
             }
@@ -186,8 +189,7 @@ class MultiSourceCatalog:
             "identifier": f"commons:{page_id}", "title": cached["title"],
             "description": cached.get("description"), "year": cached.get("year"),
             "genre": None, "language": None, "poster_url": None,
-            "license": label, "license_url": canonical,
-            "source_url": cached["source_url"],
+            "license": label, "license_url": canonical, "source_url": cached["source_url"],
             "files": [{
                 "filename": filename[:500], "format": filename.rsplit(".", 1)[-1].upper()[:40],
                 "resolution": None, "file_size": cached.get("size"),
