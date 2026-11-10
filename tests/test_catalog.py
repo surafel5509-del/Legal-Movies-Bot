@@ -49,5 +49,26 @@ async def test_save_movie_inserts_files_without_async_lazy_loading_and_is_idempo
                 select(func.count(MovieFile.id)).where(MovieFile.movie_id == movie_id)
             )
             assert count == 1
+
+            # A refreshed source URL must replace the stale URL and reset the
+            # cached Telegram copy so the next delivery fetches current bytes.
+            movie_data["files"][0]["download_url"] = "https://archive.org/download/sample-public-domain-film/updated.mp4"
+            movie_data["files"][0]["file_size"] = 2048
+            await save_movie(session, movie_data)
+            await session.commit()
+            refreshed = await session.scalar(
+                select(MovieFile).where(MovieFile.movie_id == movie_id)
+            )
+            assert refreshed.download_url.endswith("updated.mp4")
+            assert refreshed.file_size == 2048
+
+            # If the source removes a file, its old download option is removed.
+            movie_data["files"] = []
+            await save_movie(session, movie_data)
+            await session.commit()
+            count = await session.scalar(
+                select(func.count(MovieFile.id)).where(MovieFile.movie_id == movie_id)
+            )
+            assert count == 0
     finally:
         await engine.dispose()
