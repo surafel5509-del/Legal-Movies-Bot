@@ -86,23 +86,22 @@ class MultiSourceCatalog:
             title = _text(doc.get("title"))
             if not identifier or not title:
                 continue
-            ok, label, canonical = verify_archive_rights({"licenseurl": doc.get("rights") or doc.get("rights_url")})
+            ok, label, canonical = verify_archive_rights({"licenseurl": doc.get("rights_url") or doc.get("rights")})
             if not ok:
                 continue
-            record = {
+            output.append({
                 "identifier": f"loc:{identifier}", "title": title,
                 "year": _year(doc.get("date") or doc.get("created_published")),
                 "description": _text(doc.get("description")), "license": label,
                 "license_url": canonical, "source_url": doc.get("url") or LOC_ITEM.format(identifier=quote(identifier)),
-            }
-            output.append(record)
+            })
         return output
 
     async def _loc_details(self, identifier: str) -> dict | None:
         payload = await self._json(LOC_ITEM.format(identifier=quote(identifier)), {"fo": "json"})
         item = payload.get("item") or payload
         title = _text(item.get("title"))
-        ok, label, canonical = verify_archive_rights({"licenseurl": item.get("rights") or item.get("rights_url")})
+        ok, label, canonical = verify_archive_rights({"licenseurl": item.get("rights_url") or item.get("rights")})
         if not title or not ok:
             return None
         files = []
