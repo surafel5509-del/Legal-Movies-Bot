@@ -16,8 +16,9 @@ router = Router()
 @router.callback_query(F.data.startswith("download:"))
 async def download_movie(callback: CallbackQuery, downloads: DownloadManager):
     try:
-        _, identifier, file_id = callback.data.split(":", 2)
-        file_id = int(file_id)
+        payload = callback.data.removeprefix("download:")
+        identifier, raw_file_id = payload.rsplit(":", 1)
+        file_id = int(raw_file_id)
     except (ValueError, TypeError):
         await callback.answer("Invalid download selection.", show_alert=True)
         return
