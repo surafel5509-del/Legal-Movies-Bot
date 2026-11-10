@@ -1,4 +1,5 @@
 from aiogram import F, Router
+from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import CallbackQuery, Message
@@ -19,8 +20,19 @@ class SearchState(StatesGroup):
 async def begin_search(callback: CallbackQuery, state: FSMContext):
     await state.set_state(SearchState.waiting_for_query)
     await state.update_data(page=0)
-    await callback.message.answer("🔎 Send a movie title to search (for example: Sherlock Holmes).")
+    await callback.message.answer("🔎 Send any movie title or a few words from its title. You can also use /search <title>.")
     await callback.answer()
+
+
+@router.message(Command("search"))
+async def search_command(message: Message, state: FSMContext, archive):
+    query = (message.text or "").partition(" ")[2].strip()
+    if len(query) < 2:
+        await message.answer("Usage: /search movie title")
+        return
+    await state.set_state(SearchState.waiting_for_query)
+    await state.update_data(query=query, page=0)
+    await _show_results(message, state, archive, query, 0, actor=message.from_user)
 
 
 @router.message(SearchState.waiting_for_query)
@@ -40,7 +52,11 @@ async def change_page(callback: CallbackQuery, state: FSMContext, archive):
     if not query:
         await callback.answer("Start a new search first.", show_alert=True)
         return
-    page = max(0, int(callback.data.split(":", 1)[1]))
+    try:
+        page = max(0, min(int(callback.data.split(":", 1)[1]), 1000))
+    except (TypeError, ValueError):
+        await callback.answer("Invalid page.", show_alert=True)
+        return
     await state.update_data(page=page)
     await _show_results(callback.message, state, archive, query, page, actor=callback.from_user)
     await callback.answer()
@@ -61,13 +77,24 @@ async def _show_results(message, state, archive, query: str, page: int, actor=No
             await record_search(session, user, query)
         await session.commit()
     if not items:
-        await message.answer("No movies with a currently recognized redistribution license were found. Try a shorter title or another spelling.")
+        await message.answer("No matching titles with a currently recognized redistribution license were found. Try fewer words, a shorter title, or another spelling. The catalog does not contain every film ever made.")
         return
 
     def escape_html(value: object) -> str:
         return str(value).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
-    text = "<b>Verified catalog matches</b>\nOnly entries with an allowlisted explicit license are shown.\n\n" + "\n".join(
-        f"• {escape_html(item['title'])}" + (f" ({item['year']})" if item.get("year") else "") for item in items
+    heading = (
+        f"<b>🎬 Legal catalog results</b>\n"
+        f"Search: <code>{escape_html(query[:80])}</code> · Page {page + 1}\n"
+        "Only records with an explicit allowlisted license are listed.\n\n"
     )
-    await message.answer(text, reply_markup=results(items, page), parse_mode="HTML")
+    lines = []
+    for item in items:
+        title = escape_html(item["title"])
+        year = f" ({item['year']})" if item.get("year") else ""
+        lines.append(f"• {title}{year}")
+    await message.answer(
+        heading + "\n".join(lines),
+        reply_markup=results(items, page, has_next=len(items) >= settings.archive_page_size),
+        parse_mode="HTML",
+    )
