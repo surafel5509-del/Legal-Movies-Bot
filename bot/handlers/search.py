@@ -20,7 +20,7 @@ class SearchState(StatesGroup):
 async def begin_search(callback: CallbackQuery, state: FSMContext):
     await state.set_state(SearchState.waiting_for_query)
     await state.update_data(page=0)
-    await callback.message.answer("🔎 Send any movie title or a few words from its title. You can also use /search <title>.")
+    await callback.message.answer("🔎 Send any movie title or a few words from its title. You can also use /search movie title.")
     await callback.answer()
 
 
