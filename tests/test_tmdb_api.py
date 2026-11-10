@@ -35,7 +35,7 @@ class FakeSession:
 @pytest.mark.asyncio
 async def test_tmdb_search_maps_movie_metadata(monkeypatch):
     monkeypatch.setattr(tmdb_api, "settings", SimpleNamespace(
-        tmdb_api_key="test-key", request_timeout_seconds=10, tmdb_watch_region="US"
+        tmdb_api_key="test-key", request_timeout_seconds=10, tmdb_watch_region="ET"
     ))
     api = tmdb_api.TMDBAPI(FakeSession([{"results": [{
         "id": 123, "title": "Example Film", "release_date": "2024-01-02",
@@ -49,16 +49,44 @@ async def test_tmdb_search_maps_movie_metadata(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_tmdb_details_exposes_watch_providers_not_downloads(monkeypatch):
+async def test_tmdb_details_exposes_watch_providers_and_official_trailer(monkeypatch):
     monkeypatch.setattr(tmdb_api, "settings", SimpleNamespace(
-        tmdb_api_key="test-key", request_timeout_seconds=10, tmdb_watch_region="US"
+        tmdb_api_key="test-key", request_timeout_seconds=10, tmdb_watch_region="ET"
     ))
     api = tmdb_api.TMDBAPI(FakeSession([
         {"id": 123, "title": "Example Film", "release_date": "2024-01-02", "genres": [{"name": "Drama"}]},
-        {"results": {"US": {"link": "https://www.themoviedb.org/movie/123/watch",
+        {"results": {"ET": {"link": "https://www.themoviedb.org/movie/123/watch",
                             "flatrate": [{"provider_name": "Example Stream"}]}}},
+        {"results": [
+            {"site": "YouTube", "type": "Teaser", "key": "teaser", "official": True},
+            {"site": "YouTube", "type": "Trailer", "key": "official-trailer", "official": True},
+            {"site": "Vimeo", "type": "Trailer", "key": "ignored", "official": True},
+        ]},
     ]))
     details = await api.movie_details(123)
     assert details["providers"] == ["Example Stream"]
     assert details["watch_url"].endswith("/watch")
+    assert details["trailer_url"] == "https://www.youtube.com/watch?v=official-trailer"
     assert "download_url" not in details
+
+
+@pytest.mark.asyncio
+async def test_tmdb_discovery_uses_expected_endpoint(monkeypatch):
+    monkeypatch.setattr(tmdb_api, "settings", SimpleNamespace(
+        tmdb_api_key="test-key", request_timeout_seconds=10, tmdb_watch_region="ET"
+    ))
+    session = FakeSession([{"results": [{
+        "id": 456, "title": "Popular Film", "release_date": "2025-01-01",
+    }]}])
+    api = tmdb_api.TMDBAPI(session)
+    movies = await api.discover_movies("popular")
+    assert movies[0]["id"] == 456
+    assert session.urls[0][0].endswith("/movie/popular")
+    assert session.urls[0][1]["region"] == "ET"
+
+
+@pytest.mark.asyncio
+async def test_tmdb_discovery_rejects_unknown_category(monkeypatch):
+    monkeypatch.setattr(tmdb_api, "settings", SimpleNamespace(tmdb_api_key="test-key"))
+    api = tmdb_api.TMDBAPI(FakeSession([]))
+    assert await api.discover_movies("unknown") == []
