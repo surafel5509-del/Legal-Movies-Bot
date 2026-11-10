@@ -82,3 +82,41 @@ def _size(value):
 
 def _escape(value: str) -> str:
     return str(value).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+
+@router.callback_query(F.data.startswith("tmdb:"))
+async def tmdb_movie_details(callback: CallbackQuery, tmdb):
+    if not tmdb:
+        await callback.answer("Movie discovery is not configured yet.", show_alert=True)
+        return
+    try:
+        movie_id = int(callback.data.split(":", 1)[1])
+        data = await tmdb.movie_details(movie_id)
+    except (ValueError, Exception):
+        data = None
+    if not data:
+        await callback.answer("Movie information is temporarily unavailable.", show_alert=True)
+        return
+    providers = ", ".join(data["providers"]) if data["providers"] else "No provider data listed for this region."
+    text = (
+        f"🎞 <b>{_escape(data['title'])}</b> ({_escape(data['year'])})\n"
+        f"🎭 {_escape(data['genres'] or 'Genre not listed')}\n"
+        f"⏱ {data['runtime'] or 'Unknown'} min\n\n"
+        f"{_escape(data['overview'])}\n\n"
+        f"📺 <b>Watch providers ({_escape(data['region'])})</b>\n{_escape(providers)}\n\n"
+        "TMDB provides movie information and provider links, not movie files or download rights."
+    )
+    from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="▶️ Official watch options", url=data["watch_url"]),
+        InlineKeyboardButton(text="ℹ️ TMDB details", url=data["details_url"]),
+    ]])
+    if data.get("poster_url"):
+        try:
+            await callback.message.answer_photo(data["poster_url"], caption=text[:1024], reply_markup=keyboard, parse_mode="HTML")
+        except Exception:
+            await callback.message.answer(text, reply_markup=keyboard, parse_mode="HTML", disable_web_page_preview=True)
+    else:
+        await callback.message.answer(text, reply_markup=keyboard, parse_mode="HTML", disable_web_page_preview=True)
+    await callback.answer()
