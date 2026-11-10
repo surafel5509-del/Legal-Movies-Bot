@@ -81,7 +81,6 @@ class ArchiveAPI:
                     if identifier:
                         docs_by_id.setdefault(identifier, doc)
             except (aiohttp.ClientError, asyncio.TimeoutError, ValueError) as exc:
-                # One discovery strategy failing should not discard results from another.
                 last_error = exc
                 continue
         if successful_strategies == 0 and last_error is not None:
@@ -93,16 +92,18 @@ class ArchiveAPI:
             rights_ok, license_label, license_url = verify_archive_rights(doc)
             if not rights_ok:
                 continue
-            title = str(doc.get("title") or doc.get("identifier") or "")
+            identifier = str(doc["identifier"])
+            title = str(doc.get("title") or identifier)
             score = _match_score(query, query_terms, title, _plain(doc.get("description")))
             ranked.append((score, _int_or_none(doc.get("downloads")) or 0, {
-                "identifier": str(doc["identifier"]),
+                "identifier": identifier,
                 "title": title[:500],
                 "year": _year(doc.get("year")),
                 "description": _plain(doc.get("description")),
+                "poster_url": f"https://archive.org/services/img/{quote(identifier)}",
                 "license": license_label,
                 "license_url": license_url,
-                "source_url": f"https://archive.org/details/{quote(str(doc['identifier']))}",
+                "source_url": f"https://archive.org/details/{quote(identifier)}",
             }))
         ranked.sort(key=lambda row: (row[0], row[1]), reverse=True)
         start = page * settings.archive_page_size
