@@ -1,7 +1,8 @@
 from aiogram import F, Router
-from aiogram.types import CallbackQuery
+from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
+from urllib.parse import urlparse
 
 from bot.config import settings
 from bot.database.db import Session
@@ -33,8 +34,15 @@ async def download_movie(callback: CallbackQuery, downloads: DownloadManager):
             await callback.answer("This file is no longer available.", show_alert=True)
             return
         rights_ok, verified_label, verified_url = verify_archive_rights({"licenseurl": movie_file.movie.license_url})
-        if not rights_ok or verified_url != movie_file.movie.license_url or verified_label != movie_file.movie.license:
-            await callback.answer("Rights verification failed; download blocked.", show_alert=True)
+        parsed_url = urlparse(movie_file.download_url)
+        if (
+            not rights_ok
+            or verified_url != movie_file.movie.license_url
+            or verified_label != movie_file.movie.license
+            or parsed_url.scheme != "https"
+            or parsed_url.hostname not in {"archive.org", "www.archive.org"}
+        ):
+            await callback.answer("Rights or source verification failed; download blocked.", show_alert=True)
             return
         user = await get_or_create_user(session, callback.from_user)
         movie = movie_file.movie
@@ -86,8 +94,12 @@ async def download_movie(callback: CallbackQuery, downloads: DownloadManager):
             await session.commit()
         size = f"{exc.size / (1024 * 1024):.1f} MB" if exc.size else "larger than the configured upload cap"
         await callback.message.answer(
-            f"This authorized file is {size}, above this bot's Telegram upload limit ({settings.max_upload_bytes / (1024 * 1024):.0f} MB). I have not uploaded it.\n\nOpen the authorized source page: https://archive.org/details/{identifier}",
-            disable_web_page_preview=True,
+            f"This authorized file is {size}, above this bot's Telegram upload limit "
+            f"({settings.max_upload_bytes / (1024 * 1024):.0f} MB). "
+            "Use the direct download button below to save it from the authorized Archive source.",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+                InlineKeyboardButton(text="🌐 Download from Internet Archive", url=file_data["url"])
+            ]]),
         )
     except Exception:
         async with Session() as session:
@@ -97,7 +109,7 @@ async def download_movie(callback: CallbackQuery, downloads: DownloadManager):
                 await record_download(session, user, movie, "failed")
             await session.commit()
         await callback.message.answer(
-            f"The transfer failed. No download was sent. You can retry later or use the authorized source page: https://archive.org/details/{identifier}",
+            "The transfer failed. No download was sent. Please retry or use the direct download button on the movie details.",
             disable_web_page_preview=True,
         )
     finally:
