@@ -31,12 +31,18 @@ async def movie_details(callback: CallbackQuery, archive):
             fav = bool(await session.scalar(select(Favorite.id).where(Favorite.user_id == user.id, Favorite.movie_id == movie.id)))
         files = list(movie.files)
         file_lines = []
-        file_ids = []
+        file_options = []
         for movie_file in files[:8]:
             size = _size(movie_file.file_size)
             quality = movie_file.resolution or "resolution not stated"
             file_lines.append(f"• {movie_file.format} · {quality} · {size}")
-            file_ids.append(movie_file.id)
+            file_options.append({
+                "id": movie_file.id,
+                "format": movie_file.format,
+                "resolution": movie_file.resolution,
+                "file_size": movie_file.file_size,
+                "download_url": movie_file.download_url,
+            })
         description = (movie.description or "No description supplied by the catalog.")[:1100]
         text = (
             f"🎬 <b>{_escape(movie.title)}</b>\n"
@@ -49,14 +55,24 @@ async def movie_details(callback: CallbackQuery, archive):
             f"Source record: {movie.source_url}\n\n"
             f"🎞 <b>Available files</b>\n" + ("\n".join(file_lines) if file_lines else "No compatible video files were listed.")
         )
-        keyboard = movie_actions(identifier, file_ids, fav)
+        keyboard = movie_actions(identifier, file_options, fav)
         poster = movie.poster_url
-    try:
-        await callback.message.answer_photo(poster, caption=text[:1024], reply_markup=keyboard, parse_mode="HTML")
-        if len(text) > 1024:
-            await callback.message.answer(text[1024:], disable_web_page_preview=True)
-    except Exception:
-        await callback.message.answer(text, reply_markup=keyboard, parse_mode="HTML", disable_web_page_preview=True)
+        poster_caption = (
+            f"🎬 <b>{_escape(movie.title)}</b>\n"
+            f"📅 Year: {movie.release_year or 'Not listed'}\n"
+            f"⚖️ {_escape(movie.license)}"
+        )
+    if poster:
+        try:
+            await callback.message.answer_photo(poster, caption=poster_caption, parse_mode="HTML")
+        except Exception:
+            pass
+    await callback.message.answer(
+        text,
+        reply_markup=keyboard,
+        parse_mode="HTML",
+        disable_web_page_preview=True,
+    )
     await callback.answer()
 
 

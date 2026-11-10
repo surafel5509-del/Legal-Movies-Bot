@@ -15,9 +15,9 @@ class Settings:
     admin_ids: set[int]
     database_url: str
     log_level: str = "INFO"
-    max_upload_bytes: int = 49 * 1024 * 1024
+    max_upload_bytes: int = 47 * 1024 * 1024
     max_concurrent_downloads: int = 2
-    archive_page_size: int = 10
+    archive_page_size: int = 15
     cache_ttl_seconds: int = 600
     request_timeout_seconds: int = 25
     temp_dir: Path = Path("/tmp/legal-movie-bot")
@@ -34,7 +34,7 @@ class Settings:
             database_url = database_url.replace("postgres://", "postgresql+asyncpg://", 1)
         elif database_url.startswith("postgresql://") and "+asyncpg" not in database_url:
             database_url = database_url.replace("postgresql://", "postgresql+asyncpg://", 1)
-        max_upload_bytes = int(os.getenv("MAX_UPLOAD_BYTES", 49 * 1024 * 1024))
+        max_upload_bytes = min(int(os.getenv("MAX_UPLOAD_BYTES", 47 * 1024 * 1024)), 47 * 1024 * 1024)
         if max_upload_bytes < 1:
             raise ValueError("MAX_UPLOAD_BYTES must be a positive integer")
         return cls(
@@ -44,7 +44,7 @@ class Settings:
             log_level=os.getenv("LOG_LEVEL", "INFO").upper(),
             max_upload_bytes=max_upload_bytes,
             max_concurrent_downloads=max(1, int(os.getenv("MAX_CONCURRENT_DOWNLOADS", "2"))),
-            archive_page_size=max(1, min(50, int(os.getenv("ARCHIVE_PAGE_SIZE", "10")))),
+            archive_page_size=max(1, min(30, int(os.getenv("ARCHIVE_PAGE_SIZE", "15")))),
             cache_ttl_seconds=max(30, int(os.getenv("CACHE_TTL_SECONDS", "600"))),
             request_timeout_seconds=max(5, int(os.getenv("REQUEST_TIMEOUT_SECONDS", "25"))),
             temp_dir=Path(os.getenv("TEMP_DIR", "/tmp/legal-movie-bot")),
