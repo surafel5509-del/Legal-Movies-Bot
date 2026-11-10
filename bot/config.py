@@ -15,7 +15,7 @@ class Settings:
     admin_ids: set[int]
     database_url: str
     log_level: str = "INFO"
-    max_upload_bytes: int = 49 * 1024 * 1024
+    max_upload_bytes: int = 47 * 1024 * 1024
     max_concurrent_downloads: int = 2
     archive_page_size: int = 15
     cache_ttl_seconds: int = 600
@@ -34,7 +34,7 @@ class Settings:
             database_url = database_url.replace("postgres://", "postgresql+asyncpg://", 1)
         elif database_url.startswith("postgresql://") and "+asyncpg" not in database_url:
             database_url = database_url.replace("postgresql://", "postgresql+asyncpg://", 1)
-        max_upload_bytes = int(os.getenv("MAX_UPLOAD_BYTES", 49 * 1024 * 1024))
+        max_upload_bytes = min(int(os.getenv("MAX_UPLOAD_BYTES", 47 * 1024 * 1024)), 47 * 1024 * 1024)
         if max_upload_bytes < 1:
             raise ValueError("MAX_UPLOAD_BYTES must be a positive integer")
         return cls(
