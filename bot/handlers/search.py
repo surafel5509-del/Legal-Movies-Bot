@@ -42,7 +42,7 @@ async def run_search(message: Message, state: FSMContext, archive, tmdb):
         await message.answer("Please enter at least two characters.")
         return
     await state.update_data(query=query, page=0)
-    await _show_results(message, state, archive, query, 0, actor=message.from_user)
+    await _show_results(message, state, archive, tmdb, query, 0, actor=message.from_user)
 
 
 @router.callback_query(F.data.startswith("page:"))
@@ -63,13 +63,12 @@ async def change_page(callback: CallbackQuery, state: FSMContext, archive, tmdb)
 
 
 async def _show_results(message, state, archive, tmdb, query: str, page: int, actor=None):
-    if not settings.catalog_enabled:
-        await message.answer("The movie catalog is temporarily disabled.")
-        return
-    try:
-        items = await archive.search(query, page)
-    except Exception:
-        items = []
+    items = []
+    if settings.catalog_enabled:
+        try:
+            items = await archive.search(query, page)
+        except Exception:
+            items = []
     tmdb_items = []
     if tmdb:
         try:
