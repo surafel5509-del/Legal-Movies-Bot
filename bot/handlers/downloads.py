@@ -45,8 +45,6 @@ async def download_movie(callback: CallbackQuery, downloads: DownloadManager, ar
             "license": movie.license,
             "license_url": movie.license_url,
         }
-        user = await get_or_create_user(session, callback.from_user)
-
     # Re-fetch source metadata at click time. Never trust a stale DB license or
     # a URL that has changed since the search result was shown.
     try:
@@ -72,8 +70,8 @@ async def download_movie(callback: CallbackQuery, downloads: DownloadManager, ar
     async with Session() as session:
         movie = await session.get(Movie, file_data["movie_id"])
         movie_file = await session.get(MovieFile, file_id)
-        user = await session.scalar(select(User).where(User.telegram_id == callback.from_user.id))
-        if not movie or not movie_file or not user:
+        user = await get_or_create_user(session, callback.from_user)
+        if not movie or not movie_file:
             await callback.answer("This download is no longer available.", show_alert=True)
             return
         if movie_file.telegram_file_id:
