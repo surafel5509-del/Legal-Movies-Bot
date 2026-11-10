@@ -70,15 +70,22 @@ class ArchiveAPI:
             strategies.append(f"mediatype:movies AND ({any_terms})")
 
         docs_by_id: dict[str, dict] = {}
+        successful_strategies = 0
+        last_error: Exception | None = None
         for expression in strategies:
             try:
-                for doc in await self._search_docs(expression, 0):
+                docs = await self._search_docs(expression, 0)
+                successful_strategies += 1
+                for doc in docs:
                     identifier = str(doc.get("identifier") or "").strip()
                     if identifier:
                         docs_by_id.setdefault(identifier, doc)
-            except (aiohttp.ClientError, asyncio.TimeoutError, ValueError):
+            except (aiohttp.ClientError, asyncio.TimeoutError, ValueError) as exc:
                 # One discovery strategy failing should not discard results from another.
+                last_error = exc
                 continue
+        if successful_strategies == 0 and last_error is not None:
+            raise last_error
 
         query_terms = {term.casefold() for term in terms}
         ranked: list[tuple[int, int, dict]] = []
