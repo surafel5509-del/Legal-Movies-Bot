@@ -31,20 +31,22 @@ class ArchiveAPI:
                 if attempt == 2:
                     raise
                 await asyncio.sleep(0.4 * (attempt + 1))
+        return {}
 
     async def search(self, query: str, page: int = 0) -> list[dict]:
         query = re.sub(r"[^\w\s'-]", " ", query, flags=re.UNICODE).strip()[:100]
         if not query:
             return []
+        page = max(0, min(int(page), 1000))
         key = (query.casefold(), page)
         async with self._lock:
             cached = self._cache.get(key)
             if cached and cached[0] > asyncio.get_running_loop().time():
                 return cached[1]
-        escaped = query.replace('"', '')
+
         params = {
-            "q": f'mediatype:movies AND (title:"{escaped}" OR description:"{escaped}")',
-            "fl[]": ["identifier", "title", "year", "description", "licenseurl", "publicdate"],
+            "q": _build_search_query(query),
+            "fl[]": ["identifier", "title", "year", "description", "licenseurl", "publicdate", "downloads", "genre", "language"],
             "sort[]": "downloads desc",
             "rows": str(settings.archive_page_size),
             "page": str(page + 1),
@@ -55,7 +57,7 @@ class ArchiveAPI:
         results: list[dict] = []
         seen: set[str] = set()
         for doc in docs:
-            identifier = str(doc.get("identifier", ""))
+            identifier = str(doc.get("identifier", "")).strip()
             if not identifier or identifier in seen:
                 continue
             seen.add(identifier)
@@ -67,6 +69,7 @@ class ArchiveAPI:
                 "title": str(doc.get("title") or identifier)[:500],
                 "year": _year(doc.get("year")),
                 "description": _plain(doc.get("description")),
+                "downloads": _int_or_none(doc.get("downloads")),
                 "license": license_label,
                 "license_url": license_url,
                 "source_url": f"https://archive.org/details/{quote(identifier)}",
@@ -114,6 +117,20 @@ class ArchiveAPI:
             "files": selected,
             "raw": {k: v for k, v in metadata.items() if k not in {"identifier"}},
         }
+
+
+def _build_search_query(query: str) -> str:
+    """Build a broad but bounded Archive search; all terms are sanitized before Lucene syntax."""
+    terms = re.findall(r"[\w'-]+", query, flags=re.UNICODE)[:12]
+    if not terms:
+        return "mediatype:movies"
+    phrase = " ".join(terms)
+    all_terms = " AND ".join(f'"{term}"' for term in terms)
+    return (
+        "mediatype:movies AND ("
+        f'title:"{phrase}" OR title:({all_terms}) OR description:({all_terms})'
+        ")"
+    )
 
 
 def _year(value: Any) -> int | None:
