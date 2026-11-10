@@ -12,7 +12,7 @@ from bot.config import settings
 from bot.database.db import engine, init_db
 from bot.handlers import admin, discovery, downloads, favorites, movies, search, start
 from bot.middlewares.throttling import RateLimitMiddleware
-from bot.services.archive_api import ArchiveAPI
+from bot.services.multi_source_api import MultiSourceCatalog
 from bot.services.tmdb_api import TMDBAPI
 from bot.services.download_manager import DownloadManager
 
@@ -39,8 +39,10 @@ async def main() -> None:
     settings.temp_dir.mkdir(parents=True, exist_ok=True)
     await init_db()
     health_runner = await run_health_server()
-    http = aiohttp.ClientSession(headers={"User-Agent": "LegalMovieBot/1.0 (+https://archive.org)"})
-    archive = ArchiveAPI(http)
+    http = aiohttp.ClientSession(headers={
+        "User-Agent": "LegalMovieBot/2.0 (movie discovery; rights-verified downloads; contact via project repository)"
+    })
+    archive = MultiSourceCatalog(http)
     tmdb = TMDBAPI(http) if settings.tmdb_api_key else None
     downloads_manager = DownloadManager()
     downloads_manager.session = http
