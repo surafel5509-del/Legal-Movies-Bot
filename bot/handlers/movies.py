@@ -1,5 +1,6 @@
+import re
 from aiogram import F, Router
-from aiogram.types import CallbackQuery
+from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
@@ -84,6 +85,9 @@ def _escape(value: str) -> str:
     return str(value).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
+def _normalized_title(value: str) -> str:
+    return " ".join(re.findall(r"[a-z0-9]+", (value or "").casefold()))
+
 
 @router.callback_query(F.data.startswith("tmdb:"))
 async def tmdb_movie_details(callback: CallbackQuery, tmdb):
@@ -107,16 +111,94 @@ async def tmdb_movie_details(callback: CallbackQuery, tmdb):
         f"📺 <b>Watch providers ({_escape(data['region'])})</b>\n{_escape(providers)}\n\n"
         "TMDB provides movie information and provider links, not movie files or download rights."
     )
-    from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[[
+    buttons = [[
         InlineKeyboardButton(text="▶️ Official watch options", url=data["watch_url"]),
         InlineKeyboardButton(text="ℹ️ TMDB details", url=data["details_url"]),
-    ]])
+    ]]
+    if data.get("trailer_url"):
+        buttons.insert(0, [InlineKeyboardButton(text="🎬 Watch trailer", url=data["trailer_url"])])
+    buttons.append([InlineKeyboardButton(text="⬇️ Check legal download", callback_data=f"tmdbdownload:{movie_id}")])
+    keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
     if data.get("poster_url"):
         try:
             await callback.message.answer_photo(data["poster_url"], caption=text[:1024], reply_markup=keyboard, parse_mode="HTML")
         except Exception:
-            await callback.message.answer(text, reply_markup=keyboard, parse_mode="HTML", disable_web_page_preview=True)
+            await callback.message.answer(text, reply_markup=keyboard, parse_mode="HTML", disable_web_page_preview=False)
     else:
-        await callback.message.answer(text, reply_markup=keyboard, parse_mode="HTML", disable_web_page_preview=True)
+        await callback.message.answer(text, reply_markup=keyboard, parse_mode="HTML", disable_web_page_preview=False)
+    if data.get("trailer_url"):
+        await callback.message.answer(
+            "🎬 Trailer link (opens in Telegram's in-app browser when supported):\n" + data["trailer_url"],
+            disable_web_page_preview=False,
+        )
     await callback.answer()
+
+
+@router.callback_query(F.data.startswith("tmdbdownload:"))
+async def tmdb_legal_download_check(callback: CallbackQuery, tmdb, archive):
+    try:
+        movie_id = int(callback.data.split(":", 1)[1])
+        movie_data = await tmdb.movie_details(movie_id) if tmdb else None
+    except Exception:
+        movie_data = None
+    if not movie_data:
+        await callback.answer("Movie information is unavailable.", show_alert=True)
+        return
+    title_key = _normalized_title(movie_data["title"])
+    year = movie_data["year"]
+    if not title_key or year == "Not listed":
+        await callback.message.answer("I cannot safely match this movie to a downloadable file because its title or release year is missing.")
+        await callback.answer()
+        return
+
+    await callback.answer("Checking licensed sources…")
+    try:
+        candidates = await archive.search(movie_data["title"], 0)
+    except Exception:
+        candidates = []
+    verified_data = None
+    for candidate in candidates[:8]:
+        if _normalized_title(candidate.get("title", "")) != title_key:
+            continue
+        if str(candidate.get("year") or "") != str(year):
+            continue
+        try:
+            details = await archive.details(candidate["identifier"])
+        except Exception:
+            continue
+        if not details:
+            continue
+        if _normalized_title(details.get("title", "")) != title_key or str(details.get("year") or "") != str(year):
+            continue
+        if not details.get("files"):
+            continue
+        verified_data = details
+        break
+
+    if not verified_data:
+        await callback.message.answer(
+            f"⬇️ No exact-match, explicitly licensed downloadable file was found for <b>{_escape(movie_data['title'])}</b> ({_escape(year)}).\n"
+            "You can still use the official watch options. I will not offer an unrelated or unlicensed copy.",
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+                InlineKeyboardButton(text="▶️ Official watch options", url=movie_data["watch_url"])
+            ]]),
+        )
+        return
+
+    async with Session() as session:
+        movie = await save_movie(session, verified_data)
+        await session.commit()
+        movie = await session.scalar(
+            select(Movie).options(selectinload(Movie.files)).where(Movie.id == movie.id)
+        )
+        file_ids = [item.id for item in list(movie.files)[:8]]
+    if not file_ids:
+        await callback.message.answer("The source passed its license check but has no supported video files.")
+        return
+    await callback.message.answer(
+        f"✅ Exact title and year matched, and the source license passed verification.\n"
+        f"<b>{_escape(verified_data['title'])}</b> ({year})\nChoose a file to download:",
+        reply_markup=movie_actions(verified_data["identifier"], file_ids),
+        parse_mode="HTML",
+    )
