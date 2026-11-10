@@ -36,6 +36,7 @@ class ArchiveAPI:
         query = re.sub(r"[^\w\s'-]", " ", query, flags=re.UNICODE).strip()[:100]
         if not query:
             return []
+        page = max(0, min(int(page), 1000))
         key = (query.casefold(), page)
         async with self._lock:
             cached = self._cache.get(key)
@@ -43,8 +44,8 @@ class ArchiveAPI:
                 return cached[1]
         escaped = query.replace('"', '')
         params = {
-            "q": f'mediatype:movies AND (title:"{escaped}" OR description:"{escaped}")',
-            "fl[]": ["identifier", "title", "year", "description", "licenseurl", "rights", "publicdate"],
+            "q": _build_search_query(query),
+            "fl[]": ["identifier", "title", "year", "description", "licenseurl", "rights", "publicdate", "downloads", "genre", "language"],
             "sort[]": "downloads desc",
             "rows": str(settings.archive_page_size),
             "page": str(page + 1),
@@ -136,6 +137,20 @@ class ArchiveAPI:
             "files": selected,
             "raw": {k: v for k, v in metadata.items() if k not in {"identifier"}},
         }
+
+
+def _build_search_query(query: str) -> str:
+    """Build a broad, bounded Archive search from sanitized title words."""
+    terms = re.findall(r"[\\w'-]+", query, flags=re.UNICODE)[:12]
+    if not terms:
+        return "mediatype:movies"
+    phrase = " ".join(terms)
+    all_terms = " AND ".join(f'"{term}"' for term in terms)
+    return (
+        "mediatype:movies AND ("
+        f'title:"{phrase}" OR title:({all_terms}) OR description:({all_terms})'
+        ")"
+    )
 
 
 def _year(value: Any) -> int | None:
