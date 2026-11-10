@@ -6,7 +6,7 @@ A movie-only Telegram search bot built with Python 3.11+, aiogram 3, SQLAlchemy 
 
 - `/start` welcome screen, inline navigation, Help and About.
 - English and Amharic welcome/navigation labels; per-user language preference.
-- Internet Archive title/description search, partial title matching, pagination, deduplication, in-memory TTL cache, retry and timeout handling.
+- Internet Archive movie discovery with phrase, all-title-term, and individual-title-term search passes; title-first relevance ranking, pagination, deduplication, in-memory TTL cache, retry and timeout handling. Search results remain restricted to explicitly allowlisted redistribution licenses.
 - Movie details sourced from Archive metadata: title, year, description, genre, language, poster, license, source page and available MP4/WebM/M4V/OGV files.
 - Conservative license allowlist: CC0, Public Domain Mark, CC BY and CC BY-SA versions 1.0–4.0. License checks run during search and again during metadata retrieval.
 - Direct document delivery for files within `MAX_UPLOAD_BYTES`, streamed to a temporary file (not loaded fully into memory); Telegram `file_id` is cached and reused.
@@ -91,7 +91,7 @@ GitHub Actions runs compile checks and the test suite on Python 3.11, 3.12 and 3
 
 - This repository is an application scaffold, not a guarantee that every Archive.org record is lawful to redistribute. Operate only after reviewing applicable law, source records and licenses, and establishing a contact and takedown process.
 - Rights verification relies on explicit Archive `licenseurl` metadata and a conservative allowlist. It is not a legal determination of chain of title; human review and a takedown process are required for a public service.
-- Search pagination is page-based and the Archive index may return different matches over time. There is no spelling-correction engine or multilingual title translation.
+- Search uses Internet Archive's indexed metadata; it cannot guarantee that every film exists in that catalog. Results can vary as the Archive index changes. Spelling correction, multilingual title translation, and a separate commercial-film metadata provider are not configured.
 - Movie metadata availability varies; runtime, codec, quality and language may be absent. The bot never invents these values. Resolution is inferred only when encoded in the filename; codec is left unknown.
 - The Archive search endpoint may omit license metadata for some records; such records are intentionally excluded even if their item page may show a license.
 - The bot sends files only up to its configured upload cap. Actual Telegram Bot API limits can change; tune `MAX_UPLOAD_BYTES` conservatively for the Bot API endpoint in use.
