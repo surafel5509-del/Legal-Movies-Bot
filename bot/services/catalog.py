@@ -1,7 +1,6 @@
 import json
 
 from sqlalchemy import func, select
-from sqlalchemy.orm import selectinload
 
 from bot.database.models import Download, Favorite, Movie, MovieFile, SearchHistory, User, utcnow
 
@@ -23,9 +22,15 @@ async def record_search(session, user: User, query: str) -> None:
 
 
 async def save_movie(session, data: dict) -> Movie:
-    movie = await session.scalar(select(Movie).options(selectinload(Movie.files)).where(Movie.source_id == data["identifier"]))
+    movie = await session.scalar(select(Movie).where(Movie.source_id == data["identifier"]))
     if movie is None:
-        movie = Movie(source_id=data["identifier"], title=data["title"], license=data["license"], license_url=data["license_url"], source_url=data["source_url"])
+        movie = Movie(
+            source_id=data["identifier"],
+            title=data["title"],
+            license=data["license"],
+            license_url=data["license_url"],
+            source_url=data["source_url"],
+        )
         session.add(movie)
     movie.title = data["title"]
     movie.description = data.get("description")
@@ -38,7 +43,12 @@ async def save_movie(session, data: dict) -> Movie:
     movie.source_url = data["source_url"]
     movie.metadata_json = json.dumps(data.get("raw", {}), ensure_ascii=False, default=str)
     await session.flush()
-    existing = {f.filename for f in movie.files}
+
+    # Query existing filenames explicitly. Accessing movie.files on a newly
+    # inserted object triggers an async lazy load outside SQLAlchemy's greenlet.
+    existing = set((await session.scalars(
+        select(MovieFile.filename).where(MovieFile.movie_id == movie.id)
+    )).all())
     for file_data in data.get("files", []):
         if file_data["filename"] not in existing:
             session.add(MovieFile(movie_id=movie.id, **file_data))
