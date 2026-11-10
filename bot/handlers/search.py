@@ -25,18 +25,18 @@ async def begin_search(callback: CallbackQuery, state: FSMContext):
 
 
 @router.message(Command("search"))
-async def search_command(message: Message, state: FSMContext, archive):
+async def search_command(message: Message, state: FSMContext, archive, tmdb):
     query = (message.text or "").partition(" ")[2].strip()
     if len(query) < 2:
         await message.answer("Usage: /search movie title")
         return
     await state.set_state(SearchState.waiting_for_query)
     await state.update_data(query=query, page=0)
-    await _show_results(message, state, archive, query, 0, actor=message.from_user)
+    await _show_results(message, state, archive, tmdb, query, 0, actor=message.from_user)
 
 
 @router.message(SearchState.waiting_for_query)
-async def run_search(message: Message, state: FSMContext, archive):
+async def run_search(message: Message, state: FSMContext, archive, tmdb):
     query = (message.text or "").strip()
     if len(query) < 2:
         await message.answer("Please enter at least two characters.")
@@ -46,7 +46,7 @@ async def run_search(message: Message, state: FSMContext, archive):
 
 
 @router.callback_query(F.data.startswith("page:"))
-async def change_page(callback: CallbackQuery, state: FSMContext, archive):
+async def change_page(callback: CallbackQuery, state: FSMContext, archive, tmdb):
     data = await state.get_data()
     query = data.get("query")
     if not query:
@@ -58,26 +58,31 @@ async def change_page(callback: CallbackQuery, state: FSMContext, archive):
         await callback.answer("Invalid page.", show_alert=True)
         return
     await state.update_data(page=page)
-    await _show_results(callback.message, state, archive, query, page, actor=callback.from_user)
+    await _show_results(callback.message, state, archive, tmdb, query, page, actor=callback.from_user)
     await callback.answer()
 
 
-async def _show_results(message, state, archive, query: str, page: int, actor=None):
+async def _show_results(message, state, archive, tmdb, query: str, page: int, actor=None):
     if not settings.catalog_enabled:
         await message.answer("The movie catalog is temporarily disabled.")
         return
     try:
         items = await archive.search(query, page)
     except Exception:
-        await message.answer("The movie catalog is temporarily unavailable. Please try again later.")
-        return
+        items = []
+    tmdb_items = []
+    if tmdb:
+        try:
+            tmdb_items = await tmdb.search_movies(query, page + 1)
+        except Exception:
+            tmdb_items = []
     async with Session() as session:
         user = await get_or_create_user(session, actor) if actor else None
         if user:
             await record_search(session, user, query)
         await session.commit()
-    if not items:
-        await message.answer("No matching titles with a currently recognized redistribution license were found. Try fewer words, a shorter title, or another spelling. The catalog does not contain every film ever made.")
+    if not items and not tmdb_items:
+        await message.answer("No matching titles found. Try fewer words or another spelling. Configure TMDB_API_KEY for broad movie discovery; direct downloads remain limited to verified licensed catalog items.")
         return
 
     def escape_html(value: object) -> str:
@@ -93,8 +98,16 @@ async def _show_results(message, state, archive, query: str, page: int, actor=No
         title = escape_html(item["title"])
         year = f" ({item['year']})" if item.get("year") else ""
         lines.append(f"• {title}{year}")
-    await message.answer(
-        heading + "\n".join(lines),
-        reply_markup=results(items, page, has_next=len(items) >= settings.archive_page_size),
-        parse_mode="HTML",
-    )
+    if items:
+        await message.answer(
+            heading + "\n".join(lines),
+            reply_markup=results(items, page, has_next=len(items) >= settings.archive_page_size),
+            parse_mode="HTML",
+        )
+    if tmdb_items:
+        from bot.keyboards.inline import metadata_results
+        await message.answer(
+            "<b>🌍 More movie matches (TMDB)</b>\nThese are discovery results, not downloadable files. Open a title to see official watch options.",
+            reply_markup=metadata_results(tmdb_items),
+            parse_mode="HTML",
+        )
