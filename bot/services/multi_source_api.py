@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import re
-from urllib.parse import quote, unquote
+from urllib.parse import quote, unquote, urlparse
 
 import aiohttp
 
@@ -40,7 +40,6 @@ class MultiSourceCatalog:
     def __init__(self, session: aiohttp.ClientSession):
         self.http = session
         self.archive = ArchiveAPI(session)
-        self._records: dict[str, dict] = {}
 
     async def _json(self, url: str, params: dict | None = None) -> dict:
         timeout = aiohttp.ClientTimeout(total=settings.request_timeout_seconds)
@@ -96,7 +95,6 @@ class MultiSourceCatalog:
                 "description": _text(doc.get("description")), "license": label,
                 "license_url": canonical, "source_url": doc.get("url") or LOC_ITEM.format(identifier=quote(identifier)),
             }
-            self._records[record["identifier"]] = record
             output.append(record)
         return output
 
@@ -112,10 +110,8 @@ class MultiSourceCatalog:
             url = str(resource.get("url") or "")
             name = unquote(url.split("?")[0].rsplit("/", 1)[-1])
             mime = str(resource.get("mimetype") or resource.get("mime_type") or "").lower()
-            from urllib.parse import urlparse
             host = (urlparse(url).hostname or "").lower()
-            trusted_host = host == "loc.gov" or host.endswith(".loc.gov")
-            if not trusted_host or urlparse(url).scheme != "https":
+            if urlparse(url).scheme != "https" or not (host == "loc.gov" or host.endswith(".loc.gov")):
                 continue
             if not (mime.startswith("video/") or name.lower().endswith(VIDEO_EXTENSIONS)):
                 continue
@@ -147,14 +143,13 @@ class MultiSourceCatalog:
         pages = (payload.get("query") or {}).get("pages") or {}
         output = []
         for page_data in pages.values():
-            title = _text(page_data.get("title"))
+            raw_title = str(page_data.get("title") or "")
+            filename = raw_title.split(":", 1)[-1]
+            title = re.sub(r"(?i)\.(mp4|webm|ogv|m4v|mov)$", "", filename).strip()
             info = (page_data.get("imageinfo") or [{}])[0]
             ext = info.get("extmetadata") or {}
-            ok, label, canonical = verify_archive_rights({
-                "licenseurl": (ext.get("LicenseUrl") or {}).get("value")
-            })
+            ok, label, canonical = verify_archive_rights({"licenseurl": (ext.get("LicenseUrl") or {}).get("value")})
             media_url = str(info.get("url") or "")
-            from urllib.parse import urlparse
             host = (urlparse(media_url).hostname or "").lower()
             if not ok or host != "upload.wikimedia.org" or urlparse(media_url).scheme != "https":
                 continue
@@ -163,37 +158,47 @@ class MultiSourceCatalog:
             identifier = str(page_data.get("pageid") or "")
             if not identifier:
                 continue
-            year = _year((ext.get("DateTimeOriginal") or {}).get("value") or (ext.get("DateTime") or {}).get("value"))
-            record = {
+            year = _year((ext.get("DateTimeOriginal") or {}).get("value") or (ext.get("DateTime") or {}).get("value") or title)
+            output.append({
                 "identifier": f"commons:{identifier}", "title": title, "year": year,
                 "description": _text((ext.get("ImageDescription") or {}).get("value")),
                 "license": label, "license_url": canonical,
                 "source_url": info.get("descriptionurl") or "https://commons.wikimedia.org/",
-            }
-            self._records[record["identifier"]] = {
-                **record, "media_url": media_url, "filename": title.rsplit(":", 1)[-1],
-                "size": _size(info.get("size")),
-            }
-            output.append(record)
+            })
         return output
 
     async def _commons_details(self, page_id: str) -> dict | None:
-        cached = self._records.get(f"commons:{page_id}")
-        if not cached:
+        payload = await self._json(COMMONS_API, {
+            "action": "query", "format": "json", "pageids": page_id,
+            "prop": "imageinfo", "iiprop": "url|size|extmetadata",
+        })
+        pages = (payload.get("query") or {}).get("pages") or {}
+        page_data = pages.get(str(page_id)) or next(iter(pages.values()), None)
+        if not page_data:
             return None
-        ok, label, canonical = verify_archive_rights({"licenseurl": cached.get("license_url")})
-        if not ok:
+        raw_title = str(page_data.get("title") or "")
+        filename = raw_title.split(":", 1)[-1]
+        title = re.sub(r"(?i)\.(mp4|webm|ogv|m4v|mov)$", "", filename).strip()
+        info = (page_data.get("imageinfo") or [{}])[0]
+        ext = info.get("extmetadata") or {}
+        ok, label, canonical = verify_archive_rights({"licenseurl": (ext.get("LicenseUrl") or {}).get("value")})
+        media_url = str(info.get("url") or "")
+        host = (urlparse(media_url).hostname or "").lower()
+        if not ok or not title or host != "upload.wikimedia.org" or urlparse(media_url).scheme != "https":
             return None
-        filename = cached.get("filename") or f"{page_id}.mp4"
+        if not media_url.lower().split("?")[0].endswith(VIDEO_EXTENSIONS):
+            return None
+        year = _year((ext.get("DateTimeOriginal") or {}).get("value") or (ext.get("DateTime") or {}).get("value") or title)
         return {
-            "identifier": f"commons:{page_id}", "title": cached["title"],
-            "description": cached.get("description"), "year": cached.get("year"),
+            "identifier": f"commons:{page_id}", "title": title,
+            "description": _text((ext.get("ImageDescription") or {}).get("value")), "year": year,
             "genre": None, "language": None, "poster_url": None,
-            "license": label, "license_url": canonical, "source_url": cached["source_url"],
+            "license": label, "license_url": canonical,
+            "source_url": info.get("descriptionurl") or "https://commons.wikimedia.org/",
             "files": [{
                 "filename": filename[:500], "format": filename.rsplit(".", 1)[-1].upper()[:40],
-                "resolution": None, "file_size": cached.get("size"),
-                "download_url": cached["media_url"], "codec": None,
+                "resolution": None, "file_size": _size(info.get("size")),
+                "download_url": media_url, "codec": None,
             }],
             "raw": {"source": "Wikimedia Commons"},
         }
