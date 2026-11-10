@@ -4,13 +4,13 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 def home(lang: str = "en") -> InlineKeyboardMarkup:
     labels = {
-        "en": [("🔎 Search Movies", "search"), ("🔥 Popular Movies", "popular"), ("🆕 Latest Movies", "latest"), ("❤️ Favorites", "favorites"), ("🌐 Language", "language"), ("ℹ️ Help", "help"), ("About", "about")],
-        "am": [("🔎 ፊልም ፈልግ", "search"), ("🔥 ተወዳጅ ፊልሞች", "popular"), ("🆕 አዳዲስ ፊልሞች", "latest"), ("❤️ ተወዳጆች", "favorites"), ("🌐 ቋንቋ", "language"), ("ℹ️ እገዛ", "help"), ("ስለ ቦቱ", "about")],
+        "en": [(("🔎 Search Movies", "search")), (("🔥 Popular Movies", "popular")), (("📈 Trending Movies", "trending")), (("🆕 Latest Movies", "latest")), (("❤️ Favorites", "favorites")), (("🌐 Language", "language")), (("ℹ️ Help", "help")), (("About", "about"))],
+        "am": [(("🔎 ፊልም ፈልግ", "search")), (("🔥 ተወዳጅ ፊልሞች", "popular")), (("📈 ትሬንዲንግ ፊልሞች", "trending")), (("🆕 አዳዲስ ፊልሞች", "latest")), (("❤️ ተወዳጆች", "favorites")), (("🌐 ቋንቋ", "language")), (("ℹ️ እገዛ", "help")), (("ስለ ቦቱ", "about"))],
     }
     builder = InlineKeyboardBuilder()
     for label, callback in labels.get(lang, labels["en"]):
         builder.button(text=label, callback_data=f"nav:{callback}")
-    builder.adjust(2, 2, 2, 1)
+    builder.adjust(2, 2, 2, 2)
     return builder.as_markup()
 
 
@@ -34,8 +34,11 @@ def metadata_results(items: list[dict]) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     for item in items:
         year = f" ({item['year']})" if item.get("year") else ""
-        builder.button(text=f"🎞 {item['title'][:42]}{year}"[:60], callback_data=f"tmdb:{item['id']}")
-    builder.adjust(1)
+        label = f"🎞 {item['title'][:42]}{year}"[:60]
+        builder.row(
+            InlineKeyboardButton(text=label, callback_data=f"tmdb:{item['id']}"),
+            InlineKeyboardButton(text="⬇️ Check download", callback_data=f"tmdbdownload:{item['id']}"),
+        )
     return builder.as_markup()
 
 
