@@ -72,7 +72,7 @@ class ArchiveAPI:
         docs_by_id: dict[str, dict] = {}
         for expression in strategies:
             try:
-                for doc in await self._search_docs(expression, page):
+                for doc in await self._search_docs(expression, 0):
                     identifier = str(doc.get("identifier") or "").strip()
                     if identifier:
                         docs_by_id.setdefault(identifier, doc)
