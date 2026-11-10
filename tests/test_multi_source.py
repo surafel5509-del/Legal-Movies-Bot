@@ -3,6 +3,7 @@ import pytest
 from bot.services.download_manager import _trusted_download_url, _youtube_video_id
 from bot.services.license_verification import verify_archive_rights
 from bot.services.multi_source_api import MultiSourceCatalog, _loc_rights, _text, _year
+from bot.handlers.movies import _candidate_title_key
 from bot.services.youtube_cc_api import (
     YOUTUBE_CC_LABEL, YOUTUBE_LICENSE_URL, YouTubeCCCatalog, is_youtube_cc_license,
 )
@@ -29,6 +30,11 @@ def test_youtube_catalog_maps_only_long_cc_videos():
         "id": "abcdefghijk", "title": "Short clip",
         "duration": 90, "license": "Creative Commons Attribution license (reuse allowed)",
     }) is None
+
+
+def test_tmdb_exact_match_normalizes_only_youtube_generic_suffixes():
+    assert _candidate_title_key("The General (1926) - Full Movie", "youtube:abcdefghijk") == "the general"
+    assert _candidate_title_key("The General (1926)", "archive:film") == "the general 1926"
 
 
 def test_youtube_urls_are_parsed_strictly():
