@@ -1,3 +1,4 @@
+import json
 import logging
 from pathlib import Path
 
@@ -44,6 +45,7 @@ async def download_movie(callback: CallbackQuery, downloads: DownloadManager, ar
             "source_url": movie.source_url,
             "license": movie.license,
             "license_url": movie.license_url,
+            "metadata_json": movie.metadata_json,
         }
     # Re-fetch source metadata at click time. Never trust a stale DB license or
     # a URL that has changed since the search result was shown.
@@ -97,9 +99,22 @@ async def download_movie(callback: CallbackQuery, downloads: DownloadManager, ar
             file_data["url"], file_data["filename"], expected_license=file_data["license"]
         )
         upload_filename = Path(file_data["filename"]).stem + path.suffix
+        try:
+            metadata = json.loads(file_data["metadata_json"] or "{}")
+        except (TypeError, ValueError):
+            metadata = {}
+        creator = metadata.get("uploader") or metadata.get("creator") or metadata.get("author")
+        if isinstance(creator, list):
+            creator = ", ".join(str(value) for value in creator[:3])
+        credit_line = f"\nCredit: {str(creator)[:180]}" if creator else ""
+        caption = (
+            f"🎬 {file_data['movie_title'][:180]}{credit_line}"
+            f"\nLicense: {file_data['license'][:120]}"
+            f"\nSource: {file_data['source_url']}"
+            f"\nLicense terms: {file_data['license_url']}"
+        )[:1024]
         sent = await callback.message.answer_document(
-            downloads.input_file(path, upload_filename),
-            caption=f"🎬 {file_data['movie_title']}\nLicense: {file_data['license']}",
+            downloads.input_file(path, upload_filename), caption=caption,
         )
         telegram_file_id = sent.document.file_id if sent.document else None
         async with Session() as session:
