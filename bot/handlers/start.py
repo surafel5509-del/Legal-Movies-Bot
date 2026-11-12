@@ -12,8 +12,8 @@ from bot.services.catalog import get_or_create_user
 router = Router()
 
 WELCOME = {
-    "en": "🎬 <b>WELCOME TO LEGAL MOVIE BOT</b>\n\nDiscover movies with explicit redistribution licenses. Search Internet Archive, Library of Congress, Wikimedia Commons and YouTube CC videos, inspect rights, and download supported files directly here.\n\nTMDB adds broad movie discovery, trailers and official watch options; it does not provide movie files.",
-    "am": "🎬 <b>ወደ LEGAL MOVIE BOT እንኳን በደህና መጡ</b>\n\nበInternet Archive፣ Library of Congress፣ Wikimedia Commons እና YouTube CC ውስጥ የሚገኙ ግልጽ የስርጭት ፈቃድ ያላቸውን ፊልሞች ይፈልጉ። የፈቃድ ሁኔታን ያረጋግጡ እና የሚደገፉ ፋይሎችን ያውርዱ።\n\nTMDB የፊልም መረጃ፣ ትሬይለር እና የሕጋዊ መመልከቻ አማራጮችን ብቻ ያቀርባል።",
+    "en": "🎬 <b>WELCOME TO LEGAL MOVIE BOT</b>\n\nDiscover movies with explicit redistribution licenses. Search Internet Archive, Library of Congress, Wikimedia Commons and YouTube CC videos, inspect rights, and download supported files directly here.\n\nExplore movie details, official watch options, TV series and episode guides. TMDB provides metadata and official provider links, not movie files.",
+    "am": "🎬 <b>ወደ LEGAL MOVIE BOT እንኳን በደህና መጡ</b>\n\nበInternet Archive፣ Library of Congress፣ Wikimedia Commons እና YouTube CC ውስጥ ግልጽ የስርጭት ፈቃድ ያላቸውን ፊልሞች ይፈልጉ። የፈቃድ ሁኔታን ያረጋግጡ እና የሚደገፉ ፋይሎችን ያውርዱ።\n\nየTV ተከታታይ ፊልሞችን እና የክፍል መረጃዎችንም ይፈልጉ። TMDB የፊልም መረጃና የኦፊሴላዊ መመልከቻ ሊንኮችን ብቻ ያቀርባል።",
 }
 
 
@@ -27,9 +27,32 @@ async def start(message: Message, state: FSMContext):
     await message.answer(WELCOME.get(lang, WELCOME["en"]), reply_markup=home(lang), parse_mode="HTML")
 
 
+@router.message(Command("myid"))
+async def my_id(message: Message):
+    await message.answer(
+        f"Your Telegram user ID is: <code>{message.from_user.id}</code>\n"
+        "Send this number to the bot owner so it can be added to ADMIN_IDS.",
+        parse_mode="HTML",
+    )
+
+
 @router.message(Command("help"))
 async def help_command(message: Message):
-    await message.answer("Search a movie title, open a result, and review its source and license. Only explicit allowlisted CC0, Public Domain Mark, CC BY or CC BY-SA license URLs pass the automated rights gate. Files are delivered only when within the configured Telegram upload cap; larger files link to the authorized source record. Unknown rights are excluded.")
+    await message.answer(
+        "<b>Commands</b>\n"
+        "/start — open the main menu\n"
+        "/search title — search legally downloadable catalog items\n"
+        "/series title — search TV series and view season/episode guides\n"
+        "/latest — browse currently released movies\n"
+        "/categories — browse movie genres\n"
+        "/admin — administrator statistics (admins only)\n"
+        "/myid — show your Telegram user ID\n"
+        "/help — show this help\n\n"
+        "TMDB supplies metadata and official watch-provider links, not movie files. "
+        "Downloads are offered only when a source passes the bot's explicit license checks. "
+        "Unknown or unverified rights are blocked.",
+        parse_mode="HTML",
+    )
 
 
 @router.callback_query(F.data == "nav:home")
@@ -44,13 +67,22 @@ async def home_callback(callback: CallbackQuery, state: FSMContext):
 
 @router.callback_query(F.data == "nav:help")
 async def help_callback(callback: CallbackQuery):
-    await callback.message.answer("Search by title. Results can come from Internet Archive, Library of Congress, Wikimedia Commons and YouTube CC. Only supported CC0, Public Domain Mark, CC BY/CC BY-SA, explicit LOC public-domain statements and YouTube CC Attribution records are eligible. A Telegram upload is attempted only below the configured size cap.")
+    await callback.message.answer(
+        "Commands: /search title, /series title, /latest, /categories, /myid and /help. "
+        "Only explicitly licensed media can be downloaded. TMDB provides metadata and official watch links only."
+    )
     await callback.answer()
 
 
 @router.callback_query(F.data == "nav:about")
 async def about_callback(callback: CallbackQuery):
-    await callback.message.answer("Legal Movie Bot uses TMDB for metadata and official watch links, and checks Internet Archive, Library of Congress, Wikimedia Commons and YouTube CC for openly licensed media. TMDB does not supply files or download rights. This product uses the TMDB API but is not endorsed or certified by TMDB. Automated rights checks are conservative and cannot prove uploader ownership; always review the source license.")
+    await callback.message.answer(
+        "Legal Movie Bot uses TMDB for movie and TV metadata and official watch links, and checks "
+        "Internet Archive, Library of Congress, Wikimedia Commons and YouTube CC for openly licensed media. "
+        "TMDB does not supply files or download rights. This product uses the TMDB API but is not endorsed "
+        "or certified by TMDB. Automated rights checks are conservative and cannot prove uploader ownership; "
+        "always review the source license."
+    )
     await callback.answer()
 
 

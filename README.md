@@ -1,24 +1,39 @@
 # Legal Movie Bot
 
-A Telegram movie discovery and legal-download bot built with Python 3.11+, aiogram 3, SQLAlchemy async and yt-dlp.
+A Telegram movie and TV discovery bot with rights-checked downloads, built with Python 3.11+, aiogram 3, SQLAlchemy async and yt-dlp.
 
 ## Features
 
-- TMDB movie discovery, metadata, posters, trailers and regional official watch options.
+- TMDB movie discovery, metadata, posters, ratings, trailers and regional official watch options.
+- TV series search, series metadata, season lists and episode guides through documented TMDB endpoints.
+- Latest, popular, trending and genre-based movie discovery.
 - Search across Internet Archive, Library of Congress, Wikimedia Commons and YouTube videos explicitly marked Creative Commons Attribution.
 - Direct Telegram delivery for source files that pass a fresh rights check and fit the configured upload cap.
 - Source-specific metadata verification before displaying a download and again when the user presses Download.
 - Strict URL/redirect allowlists, bounded streaming and upload-size checks.
 - Favorites, Amharic/English navigation, search history and admin tools.
 
+## Commands
+
+- `/start` — open the main menu.
+- `/search title` — search legal downloadable catalog items.
+- `/series title` — search TV series, seasons and episode metadata.
+- `/latest` — browse currently released movies.
+- `/categories` — browse movie genres.
+- `/admin` — administrator statistics.
+- `/myid` — show your Telegram numeric user ID for admin setup.
+- `/help` — command and rights-policy help.
+
 ## Configure
 
-Set `BOT_TOKEN`, `ADMIN_IDS`, and `DATABASE_URL`. For broad movie discovery, set a TMDB API key:
+Set `BOT_TOKEN`, `ADMIN_IDS`, and `DATABASE_URL`. For broad movie and TV discovery, set a TMDB API key:
 
 - `TMDB_API_KEY` — optional; without it, TMDB discovery, trailers and official provider metadata are unavailable.
 - `TMDB_WATCH_REGION` — two-letter region for watch-provider lookup (for example `ET`).
 - `MAX_UPLOAD_BYTES` — Telegram upload cap; defaults to 49 MiB.
 - `ARCHIVE_PAGE_SIZE`, `CACHE_TTL_SECONDS`, `REQUEST_TIMEOUT_SECONDS` — catalog tuning.
+
+To enable the admin panel, message the bot with `/myid`, then add the returned numeric ID to Railway's `ADMIN_IDS` variable. Never paste the bot token into chat or commit it to Git.
 
 Internet Archive, Library of Congress and Wikimedia Commons public metadata APIs do not require paid keys. YouTube discovery/download uses the free open-source `yt-dlp` Python package; no YouTube API key is configured.
 
@@ -29,7 +44,7 @@ Internet Archive, Library of Congress and Wikimedia Commons public metadata APIs
 - **Wikimedia Commons:** the file page must expose an allowlisted license URL and a trusted Wikimedia file URL.
 - **YouTube:** only videos whose current extractor metadata explicitly declares the Creative Commons Attribution license are eligible. Standard YouTube-licensed videos are rejected. The uploader's declaration is not an independent proof of ownership; the source page and attribution are shown.
 
-TMDB is a metadata and watch-provider discovery service. It does not provide movie files or grant redistribution rights. A source catalog is not a blanket license. The bot fetches source metadata again immediately before delivery and verifies the exact file URL, filename and license have not changed. It does not bypass DRM, paid streaming or access restrictions.
+TMDB is a metadata and watch-provider discovery service. It does not provide movie files or grant redistribution rights. The MovieBox API project is not integrated because it is an unofficial wrapper around third-party MovieBox services and its package license does not grant rights to the underlying films. The bot does not bypass DRM, paid streaming or access restrictions.
 
 Automated rights checks cannot prove chain of title. Commercial copyrighted films such as many studio releases will generally have official watch/rent/buy options, not a free downloadable copy. The bot must never promise a legal free download when the source does not grant redistribution rights.
 

@@ -4,13 +4,25 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 def home(lang: str = "en") -> InlineKeyboardMarkup:
     labels = {
-        "en": [(("🔎 Search Movies", "search")), (("🔥 Popular Movies", "popular")), (("📈 Trending Movies", "trending")), (("🆕 Latest Movies", "latest")), (("❤️ Favorites", "favorites")), (("🌐 Language", "language")), (("ℹ️ Help", "help")), (("About", "about"))],
-        "am": [(("🔎 ፊልም ፈልግ", "search")), (("🔥 ተወዳጅ ፊልሞች", "popular")), (("📈 ትሬንዲንግ ፊልሞች", "trending")), (("🆕 አዳዲስ ፊልሞች", "latest")), (("❤️ ተወዳጆች", "favorites")), (("🌐 ቋንቋ", "language")), (("ℹ️ እገዛ", "help")), (("ስለ ቦቱ", "about"))],
+        "en": [
+            ("🔎 Search Movies", "search"), ("📺 Search TV Series", "series"),
+            ("🎭 Categories", "categories"), ("🔥 Popular Movies", "popular"),
+            ("📈 Trending Movies", "trending"), ("🆕 Latest Movies", "latest"),
+            ("❤️ Favorites", "favorites"), ("🌐 Language", "language"),
+            ("ℹ️ Help", "help"), ("About", "about"),
+        ],
+        "am": [
+            ("🔎 ፊልም ፈልግ", "search"), ("📺 ተከታታይ ፊልም ፈልግ", "series"),
+            ("🎭 ምድቦች", "categories"), ("🔥 ተወዳጅ ፊልሞች", "popular"),
+            ("📈 ትሬንዲንግ ፊልሞች", "trending"), ("🆕 አዳዲስ ፊልሞች", "latest"),
+            ("❤️ ተወዳጆች", "favorites"), ("🌐 ቋንቋ", "language"),
+            ("ℹ️ እገዛ", "help"), ("ስለ ቦቱ", "about"),
+        ],
     }
     builder = InlineKeyboardBuilder()
     for label, callback in labels.get(lang, labels["en"]):
         builder.button(text=label, callback_data=f"nav:{callback}")
-    builder.adjust(2, 2, 2, 2)
+    builder.adjust(2)
     return builder.as_markup()
 
 
