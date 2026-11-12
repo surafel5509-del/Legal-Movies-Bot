@@ -176,3 +176,28 @@ async def tv_season(callback: CallbackQuery, tmdb):
     lines.append("\nEpisode metadata only. Use the official provider links on the series page to watch.")
     await callback.message.answer("\n".join(lines), parse_mode="HTML", disable_web_page_preview=True)
     await callback.answer()
+
+@router.callback_query(F.data == "nav:series")
+async def series_menu(callback: CallbackQuery):
+    await callback.message.answer("Search a TV show with /series title — for example: /series Planet Earth")
+    await callback.answer()
+
+
+@router.callback_query(F.data == "nav:categories")
+async def categories_menu(callback: CallbackQuery, tmdb):
+    if not tmdb:
+        await callback.answer("Movie categories need a TMDB API key.", show_alert=True)
+        return
+    try:
+        genres = await tmdb.movie_genres()
+    except Exception:
+        genres = []
+    if not genres:
+        await callback.answer("Categories are temporarily unavailable.", show_alert=True)
+        return
+    builder = InlineKeyboardBuilder()
+    for genre in genres:
+        builder.button(text=str(genre["name"])[:50], callback_data=f"genre:{genre['id']}")
+    builder.adjust(2)
+    await callback.message.answer("<b>🎭 Browse by category</b>\nChoose a genre:", reply_markup=builder.as_markup(), parse_mode="HTML")
+    await callback.answer()
