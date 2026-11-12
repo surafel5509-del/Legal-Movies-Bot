@@ -212,7 +212,11 @@ class MultiSourceCatalog:
         title = re.sub(r"(?i)\.(mp4|webm|ogv|m4v|mov)$", "", filename).strip()
         info = (page_data.get("imageinfo") or [{}])[0]
         ext = info.get("extmetadata") or {}
-        ok, label, canonical = verify_archive_rights({"licenseurl": (ext.get("LicenseUrl") or {}).get("value")})
+        raw_license_url = str((ext.get("LicenseUrl") or {}).get("value") or "").strip()
+        parsed_license_url = urlparse(raw_license_url)
+        if parsed_license_url.scheme == "http" and parsed_license_url.hostname in {"creativecommons.org", "www.creativecommons.org"}:
+            raw_license_url = parsed_license_url._replace(scheme="https").geturl()
+        ok, label, canonical = verify_archive_rights({"licenseurl": raw_license_url})
         media_url = str(info.get("url") or "")
         host = (urlparse(media_url).hostname or "").lower()
         if not ok or not title or host != "upload.wikimedia.org" or urlparse(media_url).scheme != "https":
