@@ -114,6 +114,7 @@ async def tmdb_movie_details(callback: CallbackQuery, tmdb):
     providers = ", ".join(data["providers"]) if data["providers"] else "No provider data listed for this region."
     text = (
         f"🎞 <b>{_escape(data['title'])}</b> ({_escape(data['year'])})\n"
+        f"⭐ Rating: {_escape(data.get('rating') or 'Not listed')}\n"
         f"🎭 {_escape(data['genres'] or 'Genre not listed')}\n"
         f"⏱ {data['runtime'] or 'Unknown'} min\n\n"
         f"{_escape(data['overview'])}\n\n"
