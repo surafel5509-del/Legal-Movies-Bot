@@ -90,3 +90,52 @@ async def test_tmdb_discovery_rejects_unknown_category(monkeypatch):
     monkeypatch.setattr(tmdb_api, "settings", SimpleNamespace(tmdb_api_key="test-key"))
     api = tmdb_api.TMDBAPI(FakeSession([]))
     assert await api.discover_movies("unknown") == []
+
+
+@pytest.mark.asyncio
+async def test_tmdb_search_tv_maps_series_metadata(monkeypatch):
+    monkeypatch.setattr(tmdb_api, "settings", SimpleNamespace(
+        tmdb_api_key="test-key", request_timeout_seconds=10, tmdb_watch_region="ET"
+    ))
+    session = FakeSession([{"results": [{
+        "id": 789, "name": "Example Series", "first_air_date": "2022-04-01",
+        "overview": "Series synopsis.", "poster_path": "/series.jpg",
+    }]}])
+    api = tmdb_api.TMDBAPI(session)
+    items = await api.search_tv("Example Series")
+    assert items[0]["id"] == 789
+    assert items[0]["year"] == "2022"
+    assert session.urls[0][0].endswith("/search/tv")
+
+
+@pytest.mark.asyncio
+async def test_tmdb_tv_season_returns_episode_metadata(monkeypatch):
+    monkeypatch.setattr(tmdb_api, "settings", SimpleNamespace(
+        tmdb_api_key="test-key", request_timeout_seconds=10, tmdb_watch_region="ET"
+    ))
+    session = FakeSession([{"id": 22, "name": "Season One", "episodes": [{
+        "episode_number": 1, "name": "Pilot", "air_date": "2024-01-01",
+        "overview": "First episode.",
+    }]}])
+    api = tmdb_api.TMDBAPI(session)
+    season = await api.tv_season(789, 1)
+    assert season["episodes"][0]["name"] == "Pilot"
+    assert session.urls[0][0].endswith("/tv/789/season/1")
+
+
+@pytest.mark.asyncio
+async def test_tmdb_movie_genres_and_genre_discovery(monkeypatch):
+    monkeypatch.setattr(tmdb_api, "settings", SimpleNamespace(
+        tmdb_api_key="test-key", request_timeout_seconds=10, tmdb_watch_region="ET"
+    ))
+    session = FakeSession([
+        {"genres": [{"id": 18, "name": "Drama"}]},
+        {"results": [{"id": 123, "title": "Drama film", "release_date": "2020-01-01"}]},
+    ])
+    api = tmdb_api.TMDBAPI(session)
+    genres = await api.movie_genres()
+    movies = await api.discover_movies_by_genre(18)
+    assert genres == [{"id": 18, "name": "Drama"}]
+    assert movies[0]["id"] == 123
+    assert session.urls[1][0].endswith("/discover/movie")
+    assert session.urls[1][1]["with_genres"] == 18
