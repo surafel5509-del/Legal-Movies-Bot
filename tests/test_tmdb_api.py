@@ -39,11 +39,12 @@ async def test_tmdb_search_maps_movie_metadata(monkeypatch):
     ))
     api = tmdb_api.TMDBAPI(FakeSession([{"results": [{
         "id": 123, "title": "Example Film", "release_date": "2024-01-02",
-        "overview": "A synopsis.", "poster_path": "/poster.jpg",
+        "overview": "A synopsis.", "poster_path": "/poster.jpg", "vote_average": 8.2,
     }]}]))
     results = await api.search_movies("Example Film")
     assert results[0]["id"] == 123
     assert results[0]["year"] == "2024"
+    assert results[0]["rating"] == 8.2
     assert results[0]["poster_url"].endswith("/poster.jpg")
     assert results[0]["watch_url"].startswith("https://www.themoviedb.org/movie/123/watch")
 
@@ -54,7 +55,7 @@ async def test_tmdb_details_exposes_watch_providers_and_official_trailer(monkeyp
         tmdb_api_key="test-key", request_timeout_seconds=10, tmdb_watch_region="ET"
     ))
     api = tmdb_api.TMDBAPI(FakeSession([
-        {"id": 123, "title": "Example Film", "release_date": "2024-01-02", "genres": [{"name": "Drama"}]},
+        {"id": 123, "title": "Example Film", "release_date": "2024-01-02", "genres": [{"name": "Drama"}], "vote_average": 7.9},
         {"results": {"ET": {"link": "https://www.themoviedb.org/movie/123/watch",
                             "flatrate": [{"provider_name": "Example Stream"}]}}},
         {"results": [
@@ -65,6 +66,7 @@ async def test_tmdb_details_exposes_watch_providers_and_official_trailer(monkeyp
     ]))
     details = await api.movie_details(123)
     assert details["providers"] == ["Example Stream"]
+    assert details["rating"] == 7.9
     assert details["watch_url"].endswith("/watch")
     assert details["trailer_url"] == "https://www.youtube.com/watch?v=official-trailer"
     assert "download_url" not in details
