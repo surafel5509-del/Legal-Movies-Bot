@@ -20,7 +20,7 @@ def verify_archive_rights(metadata: dict) -> tuple[bool, str | None, str | None]
     parsed = urlparse(raw)
     host = (parsed.hostname or "").lower()
     if (
-        parsed.scheme not in {"https", "http"}
+        parsed.scheme != "https"
         or host not in {"creativecommons.org", "www.creativecommons.org"}
         or parsed.port is not None or parsed.query or parsed.fragment
     ):
