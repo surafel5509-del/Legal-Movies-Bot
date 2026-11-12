@@ -10,7 +10,7 @@ from aiogram.enums import ParseMode
 
 from bot.config import settings
 from bot.database.db import engine, init_db
-from bot.handlers import admin, discovery, downloads, favorites, movies, search, start
+from bot.handlers import admin, discovery, downloads, favorites, movies, search, series, start
 from bot.middlewares.throttling import RateLimitMiddleware
 from bot.services.multi_source_api import MultiSourceCatalog
 from bot.services.tmdb_api import TMDBAPI
@@ -40,7 +40,7 @@ async def main() -> None:
     await init_db()
     health_runner = await run_health_server()
     http = aiohttp.ClientSession(headers={
-        "User-Agent": "LegalMovieBot/2.0 (movie discovery; rights-verified downloads; contact via project repository)"
+        "User-Agent": "LegalMovieBot/2.1 (movie and TV discovery; rights-verified downloads; contact via project repository)"
     })
     archive = MultiSourceCatalog(http)
     tmdb = TMDBAPI(http) if settings.tmdb_api_key else None
@@ -53,7 +53,7 @@ async def main() -> None:
     dp["downloads"] = downloads_manager
     dp.message.middleware(RateLimitMiddleware())
     dp.callback_query.middleware(RateLimitMiddleware(0.25))
-    for router in (start.router, search.router, movies.router, downloads.router, favorites.router, discovery.router, admin.router):
+    for router in (start.router, search.router, movies.router, series.router, downloads.router, favorites.router, discovery.router, admin.router):
         dp.include_router(router)
     try:
         await bot.delete_webhook(drop_pending_updates=True)
