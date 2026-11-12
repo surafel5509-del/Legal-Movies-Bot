@@ -144,7 +144,7 @@ def _build_search_query(query: str) -> str:
     if not terms:
         return "mediatype:movies"
     phrase = " ".join(terms)
-    all_terms = " AND ".join(terms)
+    all_terms = " AND ".join(f'"{term}"' for term in terms)
     return (
         "mediatype:movies AND ("
         f'title:"{phrase}" OR title:({all_terms}) OR description:({all_terms})'
