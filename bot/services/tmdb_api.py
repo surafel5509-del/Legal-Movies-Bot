@@ -13,7 +13,7 @@ IMAGE_ROOT = "https://image.tmdb.org/t/p/w500"
 
 
 class TMDBAPI:
-    """Movie metadata discovery and official watch/trailer links; never a video host."""
+    """Movie and TV metadata plus official watch links; never a video host."""
 
     def __init__(self, session: aiohttp.ClientSession):
         self.http = session
@@ -43,6 +43,21 @@ class TMDBAPI:
             "watch_url": f"https://www.themoviedb.org/movie/{movie_id}/watch?locale={quote(settings.tmdb_watch_region)}",
         }
 
+    @staticmethod
+    def _map_tv(item: dict) -> dict | None:
+        tv_id = item.get("id")
+        if not isinstance(tv_id, int):
+            return None
+        return {
+            "id": tv_id,
+            "title": str(item.get("name") or "Untitled")[:250],
+            "year": str(item.get("first_air_date") or "")[:4] or None,
+            "overview": str(item.get("overview") or "")[:1200],
+            "poster_url": f"{IMAGE_ROOT}{item['poster_path']}" if item.get("poster_path") else None,
+            "details_url": f"https://www.themoviedb.org/tv/{tv_id}",
+            "watch_url": f"https://www.themoviedb.org/tv/{tv_id}/watch?locale={quote(settings.tmdb_watch_region)}",
+        }
+
     async def search_movies(self, query: str, page: int = 1) -> list[dict]:
         query = " ".join(query.split())[:100]
         if len(query) < 2 or not settings.tmdb_api_key:
@@ -52,6 +67,17 @@ class TMDBAPI:
         })
         return [mapped for item in payload.get("results", [])[:10]
                 if (mapped := self._map_movie(item)) is not None]
+
+    async def search_tv(self, query: str, page: int = 1) -> list[dict]:
+        query = " ".join(query.split())[:100]
+        if len(query) < 2 or not settings.tmdb_api_key:
+            return []
+        payload = await self._json("search/tv", {
+            "query": query, "page": max(1, min(int(page), 500)),
+            "include_adult": "false",
+        })
+        return [mapped for item in payload.get("results", [])[:10]
+                if (mapped := self._map_tv(item)) is not None]
 
     async def discover_movies(self, category: str, page: int = 1) -> list[dict]:
         """Return curated TMDB lists for popular, trending, and current releases."""
@@ -64,6 +90,29 @@ class TMDBAPI:
         if not endpoint or not settings.tmdb_api_key:
             return []
         payload = await self._json(endpoint, {
+            "page": max(1, min(int(page), 500)),
+            "region": settings.tmdb_watch_region,
+        })
+        return [mapped for item in payload.get("results", [])[:10]
+                if (mapped := self._map_movie(item)) is not None]
+
+    async def movie_genres(self) -> list[dict]:
+        if not settings.tmdb_api_key:
+            return []
+        payload = await self._json("genre/movie/list", {"language": "en-US"})
+        return [
+            {"id": int(item["id"]), "name": str(item["name"])[:80]}
+            for item in payload.get("genres", [])
+            if isinstance(item.get("id"), int) and item.get("name")
+        ]
+
+    async def discover_movies_by_genre(self, genre_id: int, page: int = 1) -> list[dict]:
+        if not settings.tmdb_api_key or genre_id < 1:
+            return []
+        payload = await self._json("discover/movie", {
+            "with_genres": int(genre_id),
+            "sort_by": "popularity.desc",
+            "include_adult": "false",
             "page": max(1, min(int(page), 500)),
             "region": settings.tmdb_watch_region,
         })
@@ -114,4 +163,63 @@ class TMDBAPI:
             "providers": providers,
             "region": settings.tmdb_watch_region,
             "trailer_url": trailer_url,
+        }
+
+    async def tv_details(self, tv_id: int) -> dict | None:
+        if not settings.tmdb_api_key or tv_id < 1:
+            return None
+        show = await self._json(f"tv/{tv_id}")
+        if not show or not show.get("id"):
+            return None
+        provider_payload = await self._json(f"tv/{tv_id}/watch/providers")
+        region = provider_payload.get("results", {}).get(settings.tmdb_watch_region, {})
+        providers = []
+        for category in ("flatrate", "free", "ads", "rent", "buy"):
+            for provider in region.get(category, [])[:8]:
+                name = str(provider.get("provider_name") or "").strip()
+                if name and name not in providers:
+                    providers.append(name)
+        seasons = [
+            {
+                "season_number": int(season.get("season_number") or 0),
+                "episode_count": int(season.get("episode_count") or 0),
+                "name": str(season.get("name") or "")[:100],
+            }
+            for season in show.get("seasons", [])
+            if isinstance(season.get("season_number"), int)
+        ]
+        return {
+            "id": tv_id,
+            "title": str(show.get("name") or "Untitled")[:250],
+            "year": str(show.get("first_air_date") or "")[:4] or "Not listed",
+            "overview": str(show.get("overview") or "No synopsis available.")[:2500],
+            "genres": ", ".join(g["name"] for g in show.get("genres", []) if g.get("name"))[:300],
+            "rating": show.get("vote_average"),
+            "episode_count": show.get("number_of_episodes"),
+            "seasons": seasons,
+            "poster_url": f"{IMAGE_ROOT}{show['poster_path']}" if show.get("poster_path") else None,
+            "details_url": f"https://www.themoviedb.org/tv/{tv_id}",
+            "watch_url": region.get("link") or f"https://www.themoviedb.org/tv/{tv_id}/watch?locale={quote(settings.tmdb_watch_region)}",
+            "providers": providers,
+            "region": settings.tmdb_watch_region,
+        }
+
+    async def tv_season(self, tv_id: int, season_number: int) -> dict | None:
+        if not settings.tmdb_api_key or tv_id < 1 or season_number < 0:
+            return None
+        payload = await self._json(f"tv/{tv_id}/season/{season_number}")
+        if not payload or payload.get("id") is None:
+            return None
+        return {
+            "name": str(payload.get("name") or f"Season {season_number}")[:120],
+            "episodes": [
+                {
+                    "episode_number": int(item.get("episode_number") or 0),
+                    "name": str(item.get("name") or "Untitled")[:180],
+                    "air_date": str(item.get("air_date") or "")[:10],
+                    "overview": str(item.get("overview") or "")[:500],
+                }
+                for item in payload.get("episodes", [])
+                if isinstance(item.get("episode_number"), int)
+            ],
         }
