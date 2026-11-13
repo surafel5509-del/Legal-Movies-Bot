@@ -109,7 +109,7 @@ async def moviebox_details(callback: CallbackQuery, state: FSMContext, moviebox)
         f"🌍 Country: {esc(details.get('country') or 'Not listed')}",
         f"⏱ Duration: {esc(details.get('duration') or 'Not listed')}",
         "",
-        esc(details.get("description") or "No description supplied."),
+        esc((details.get("description") or "No description supplied.")[:1200]),
     ]
     seasons = details.get("seasons") or []
     if seasons:
