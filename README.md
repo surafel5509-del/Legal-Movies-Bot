@@ -4,7 +4,9 @@ A Telegram movie and TV discovery bot with rights-checked downloads, built with 
 
 ## Features
 
-- MovieBox movie and TV search, title metadata, ratings, genres and season/episode counts through the exact `hoby-qode/moviebox-api` v2 client. MovieBox stream/download URLs are not exposed by this bot.\n- TMDB movie discovery, metadata, posters, ratings, trailers and regional official watch options.\n- TV series search, series metadata, season lists and episode guides through documented TMDB endpoints.
+- MovieBox movie and TV search, title metadata, ratings, genres and season/episode counts through the exact `hoby-qode/moviebox-api` v2 client. MovieBox stream/download URLs are not exposed by this bot.
+- TMDB movie discovery, metadata, posters, ratings, trailers and regional official watch options.
+- TV series search, series metadata, season lists and episode guides through documented TMDB endpoints.
 - Latest, popular, trending and genre-based movie discovery.
 - Search across Internet Archive, Library of Congress, Wikimedia Commons and YouTube videos explicitly marked Creative Commons Attribution.
 - Direct Telegram delivery for source files that pass a fresh rights check and fit the configured upload cap.
@@ -15,7 +17,9 @@ A Telegram movie and TV discovery bot with rights-checked downloads, built with 
 ## Commands
 
 - `/start` — open the main menu.
-- `/search title` — search MovieBox, licensed downloadable catalogs and TMDB.\n- `/moviebox title` — search MovieBox directly.\n- `/series title` — search TV series, seasons and episode metadata.
+- `/search title` — search MovieBox, licensed downloadable catalogs and TMDB.
+- `/moviebox title` — search MovieBox directly.
+- `/series title` — search TV series, seasons and episode metadata.
 - `/latest` — browse currently released movies.
 - `/categories` — browse movie genres.
 - `/admin` — administrator statistics.
