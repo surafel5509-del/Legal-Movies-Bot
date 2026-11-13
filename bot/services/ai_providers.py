@@ -13,7 +13,7 @@ class ProviderError(RuntimeError):
 
 
 class AIProviders:
-    """Thin async clients for AI Horde image generation and JSON2Video Azure TTS."""
+    """Async clients for AI Horde image generation and JSON2Video Azure TTS."""
 
     HORDE_API = "https://aihorde.net/api/v2"
     JSON2VIDEO_API = "https://api.json2video.com/v2"
@@ -55,26 +55,35 @@ class AIProviders:
             if not request_id:
                 raise ProviderError("AI Horde did not return a generation ID.")
 
-        # Community workers are volunteer-run; anonymous requests can wait in a queue.
+        # The check endpoint is intended for frequent polling. The full status
+        # endpoint is rate-limited and should be called only after completion.
         for _ in range(90):
             await asyncio.sleep(5)
             async with self.session.get(
-                f"{self.HORDE_API}/generate/status/{request_id}",
+                f"{self.HORDE_API}/generate/check/{request_id}",
                 headers=headers,
                 timeout=aiohttp.ClientTimeout(total=30),
             ) as response:
-                status: dict[str, Any] = await response.json(content_type=None)
+                progress: dict[str, Any] = await response.json(content_type=None)
                 if response.status >= 400:
-                    raise ProviderError(status.get("message", "Could not read AI Horde job status."))
-            if status.get("faulted"):
+                    raise ProviderError(progress.get("message", "Could not read AI Horde job status."))
+            if progress.get("faulted"):
                 raise ProviderError("AI Horde could not complete this image. Please try another prompt.")
-            generations = status.get("generations") or []
-            if status.get("done") and generations:
-                encoded = generations[0].get("img")
-                if not encoded:
+            if progress.get("done"):
+                async with self.session.get(
+                    f"{self.HORDE_API}/generate/status/{request_id}",
+                    headers=headers,
+                    timeout=aiohttp.ClientTimeout(total=30),
+                ) as response:
+                    result: dict[str, Any] = await response.json(content_type=None)
+                    if response.status >= 400:
+                        raise ProviderError(result.get("message", "Could not retrieve the generated image."))
+                generations = result.get("generations") or []
+                if not generations or not generations[0].get("img"):
                     raise ProviderError("AI Horde completed the job but returned no image.")
                 try:
-                    return base64.b64decode(encoded, validate=True)
+                    # AI Horde returns generated images as base64-encoded WebP.
+                    return base64.b64decode(generations[0]["img"], validate=True)
                 except (ValueError, TypeError) as exc:
                     raise ProviderError("AI Horde returned an invalid image payload.") from exc
         raise ProviderError("Image generation is taking longer than expected. Please try again later.")
