@@ -41,7 +41,8 @@ async def help_command(message: Message):
     await message.answer(
         "<b>Commands</b>\n"
         "/start — open the main menu\n"
-        "/search title — search legally downloadable catalog items\n"
+        "/search title — search MovieBox, licensed catalogs and TMDB\n"
+        "/moviebox title — search MovieBox directly\n"
         "/series title — search TV series and view season/episode guides\n"
         "/latest — browse currently released movies\n"
         "/categories — browse movie genres\n"
@@ -68,7 +69,7 @@ async def home_callback(callback: CallbackQuery, state: FSMContext):
 @router.callback_query(F.data == "nav:help")
 async def help_callback(callback: CallbackQuery):
     await callback.message.answer(
-        "Commands: /search title, /series title, /latest, /categories, /myid and /help. "
+        "Commands: /search title, /moviebox title, /series title, /latest, /categories, /myid and /help. "
         "Only explicitly licensed media can be downloaded. TMDB provides metadata and official watch links only."
     )
     await callback.answer()
