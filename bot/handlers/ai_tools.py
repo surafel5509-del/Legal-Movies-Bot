@@ -108,7 +108,7 @@ async def make_image(message: Message, prompt: str, ai: AIProviders) -> None:
     try:
         image = await ai.generate_image(prompt)
         await message.answer_photo(
-            BufferedInputFile(image, filename="ai-horde-image.png"),
+            BufferedInputFile(image, filename="ai-horde-image.webp"),
             caption="✨ Your AI-generated image",
         )
         await status.delete()
