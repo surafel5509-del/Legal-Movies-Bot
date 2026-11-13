@@ -1,73 +1,50 @@
-# Legal Movie Bot
+# AI Image & Voice Bot
 
-A Telegram movie and TV discovery bot with rights-checked downloads, built with Python 3.13, aiogram 3, SQLAlchemy async and yt-dlp.
+A Telegram bot that creates AI images and text-to-speech voiceover videos.
 
 ## Features
 
-- MovieBox movie and TV search, title metadata, ratings, genres and season/episode counts through the exact `hoby-qode/moviebox-api` v2 client. MovieBox stream/download URLs are not exposed by this bot.
-- TMDB movie discovery, metadata, posters, ratings, trailers and regional official watch options.
-- TV series search, series metadata, season lists and episode guides through documented TMDB endpoints.
-- Latest, popular, trending and genre-based movie discovery.
-- Search across Internet Archive, Library of Congress, Wikimedia Commons and YouTube videos explicitly marked Creative Commons Attribution.
-- Direct Telegram delivery for source files that pass a fresh rights check and fit the configured upload cap.
-- Source-specific metadata verification before displaying a download and again when the user presses Download.
-- Strict URL/redirect allowlists, bounded streaming and upload-size checks.
-- Favorites, Amharic/English navigation, search history and admin tools.
+- `/image prompt` — generate an image with the free, community-powered AI Horde API.
+- `/voice text` — turn Amharic text into an MP4 voiceover using Microsoft Azure Amharic voice through JSON2Video.
+- `/voice_en text` — generate an English voiceover video.
+- Inline menu buttons, prompt entry, queue polling, clear error messages and a Railway `/health` endpoint.
+- No API key is required for basic AI Horde access. Anonymous requests use the public key and have the lowest queue priority.
+- JSON2Video requires a free API key. New accounts receive 600 non-renewable credits; free renders are limited to 60 seconds and may include a watermark.
+
+## Required environment variables
+
+- `BOT_TOKEN` — Telegram bot token from BotFather.
+- `JSON2VIDEO_API_KEY` — API key from https://json2video.com/dashboard/apikeys (required for voice generation).
+- `AI_HORDE_API_KEY` — optional registered AI Horde key; defaults to the anonymous key `0000000000`.
+- `LOG_LEVEL` — optional, defaults to `INFO`.
+
+Never commit API keys or paste them into public chats. Add them in Railway → Service → Variables.
 
 ## Commands
 
-- `/start` — open the main menu.
-- `/search title` — search MovieBox, licensed downloadable catalogs and TMDB.
-- `/moviebox title` — search MovieBox directly.
-- `/series title` — search TV series, seasons and episode metadata.
-- `/latest` — browse currently released movies.
-- `/categories` — browse movie genres.
-- `/admin` — administrator statistics.
-- `/myid` — show your Telegram numeric user ID for admin setup.
-- `/help` — command and rights-policy help.
+- `/start` — open the AI Image & Voice menu.
+- `/image a cinematic mountain landscape` — generate an image.
+- `/voice ሰላም እንዴት ነህ?` — Amharic voiceover (Mekdes).
+- `/voice_en Hello there` — English voiceover.
+- `/help` — usage and provider details.
 
-## Configure
+## Free-tier notes
 
-Set `BOT_TOKEN`, `ADMIN_IDS`, and `DATABASE_URL`. For broad movie and TV discovery, set a TMDB API key:
+AI Horde is a volunteer-run service, so anonymous requests may wait in a queue. A free registered key improves priority.
 
-- `TMDB_API_KEY` — optional; without it, TMDB discovery, trailers and official provider metadata are unavailable.
-- `TMDB_WATCH_REGION` — two-letter region for watch-provider lookup (for example `ET`).
-- `MAX_UPLOAD_BYTES` — Telegram upload cap; defaults to 49 MiB.
-- `ARCHIVE_PAGE_SIZE`, `CACHE_TTL_SECONDS`, `REQUEST_TIMEOUT_SECONDS` — catalog tuning.
+JSON2Video's free plan currently includes 600 one-time credits, with a 60-second maximum per render. The bot returns an MP4 containing the synthesized voice. Downloading a standalone MP3 audio track is a paid-plan feature; free renders may carry a watermark. The app does not purchase credits or upgrade plans automatically.
 
-To enable the admin panel, message the bot with `/myid`, then add the returned numeric ID to Railway's `ADMIN_IDS` variable. Never paste the bot token into chat or commit it to Git.
-
-Internet Archive, Library of Congress and Wikimedia Commons public metadata APIs do not require paid keys. YouTube discovery/download uses the free open-source `yt-dlp` Python package; no YouTube API key is configured.
-
-## Sources and rights policy
-
-- **Internet Archive:** item metadata must expose an allowlisted CC0, Public Domain Mark, CC BY or CC BY-SA URL.
-- **Library of Congress:** automated delivery requires an explicit supported Creative Commons URL or an item-level rights statement explicitly identifying the work as public domain. "No known copyright restrictions" by itself is not treated as a redistribution license.
-- **Wikimedia Commons:** the file page must expose an allowlisted license URL and a trusted Wikimedia file URL.
-- **YouTube:** only videos whose current extractor metadata explicitly declares the Creative Commons Attribution license are eligible. Standard YouTube-licensed videos are rejected. The uploader's declaration is not an independent proof of ownership; the source page and attribution are shown.
-
-TMDB and the MovieBox API are used for discovery and metadata only. The exact MovieBox API dependency is pinned to a Git commit and the app runs on Python 3.13 as required by the wrapper's Python 3.12+ package metadata. The MovieBox wrapper's own license does not grant rights to the underlying films. The bot does not expose MovieBox stream/download URLs, bypass DRM, paid streaming or access restrictions.
-
-Automated rights checks cannot prove chain of title. Commercial copyrighted films such as many studio releases will generally have official watch/rent/buy options, not a free downloadable copy. The bot must never promise a legal free download when the source does not grant redistribution rights.
-
-## Download behavior
-
-Direct files are restricted to HTTPS URLs on known source domains. Redirects are checked hop by hop. Files are streamed to temporary storage under a strict byte cap. YouTube videos are downloaded using yt-dlp only after a fresh CC license check, with a second license check inside the downloader. Unsupported or oversized files are not sent to Telegram. Temporary files are removed after delivery.
-
-## Local setup
+## Local run
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env
+# Set BOT_TOKEN and JSON2VIDEO_API_KEY in .env
 python -m bot.main
 ```
 
-Run tests:
+## Safety
 
-```bash
-BOT_TOKEN=123456:TEST ADMIN_IDS=1 DATABASE_URL=sqlite+aiosqlite:///:memory: python -m pytest -q
-```
-
-Only one polling replica should run for a Telegram bot token at a time.
+The bot is for lawful narration of text the user is authorized to use. It does not offer voice cloning, celebrity imitation, impersonation or deceptive audio generation.
