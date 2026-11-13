@@ -42,7 +42,6 @@ class AIProviders:
             },
             "nsfw": False,
             "censor_nsfw": True,
-            "r2": True,
         }
         async with self.session.post(
             f"{self.HORDE_API}/generate/async",
