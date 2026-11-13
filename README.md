@@ -1,9 +1,10 @@
 # Legal Movie Bot
 
-A Telegram movie and TV discovery bot with rights-checked downloads, built with Python 3.11+, aiogram 3, SQLAlchemy async and yt-dlp.
+A Telegram movie and TV discovery bot with rights-checked downloads, built with Python 3.13, aiogram 3, SQLAlchemy async and yt-dlp.
 
 ## Features
 
+- MovieBox movie and TV search, title metadata, ratings, genres and season/episode counts through the exact `hoby-qode/moviebox-api` v2 client. MovieBox stream/download URLs are not exposed by this bot.
 - TMDB movie discovery, metadata, posters, ratings, trailers and regional official watch options.
 - TV series search, series metadata, season lists and episode guides through documented TMDB endpoints.
 - Latest, popular, trending and genre-based movie discovery.
@@ -16,7 +17,8 @@ A Telegram movie and TV discovery bot with rights-checked downloads, built with 
 ## Commands
 
 - `/start` — open the main menu.
-- `/search title` — search legal downloadable catalog items.
+- `/search title` — search MovieBox, licensed downloadable catalogs and TMDB.
+- `/moviebox title` — search MovieBox directly.
 - `/series title` — search TV series, seasons and episode metadata.
 - `/latest` — browse currently released movies.
 - `/categories` — browse movie genres.
@@ -44,7 +46,7 @@ Internet Archive, Library of Congress and Wikimedia Commons public metadata APIs
 - **Wikimedia Commons:** the file page must expose an allowlisted license URL and a trusted Wikimedia file URL.
 - **YouTube:** only videos whose current extractor metadata explicitly declares the Creative Commons Attribution license are eligible. Standard YouTube-licensed videos are rejected. The uploader's declaration is not an independent proof of ownership; the source page and attribution are shown.
 
-TMDB is a metadata and watch-provider discovery service. It does not provide movie files or grant redistribution rights. The MovieBox API project is not integrated because it is an unofficial wrapper around third-party MovieBox services and its package license does not grant rights to the underlying films. The bot does not bypass DRM, paid streaming or access restrictions.
+TMDB and the MovieBox API are used for discovery and metadata only. The exact MovieBox API dependency is pinned to a Git commit and the app runs on Python 3.13 as required by the wrapper's Python 3.12+ package metadata. The MovieBox wrapper's own license does not grant rights to the underlying films. The bot does not expose MovieBox stream/download URLs, bypass DRM, paid streaming or access restrictions.
 
 Automated rights checks cannot prove chain of title. Commercial copyrighted films such as many studio releases will generally have official watch/rent/buy options, not a free downloadable copy. The bot must never promise a legal free download when the source does not grant redistribution rights.
 
