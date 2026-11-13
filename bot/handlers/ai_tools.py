@@ -107,7 +107,7 @@ def choice_keyboard(kind: str, current: str) -> InlineKeyboardMarkup:
 
 async def show_home(message: Message, state: FSMContext | None = None) -> None:
     if state:
-        await state.clear()
+        await state.set_state(None)
     await message.answer(
         "✨ <b>Welcome to AI Studio</b>\n"
         "<i>Your creative workspace for AI images and natural voiceovers.</i>\n\n"
@@ -132,7 +132,7 @@ async def menu_command(message: Message, state: FSMContext) -> None:
 
 @router.message(Command("cancel"))
 async def cancel_command(message: Message, state: FSMContext) -> None:
-    await state.clear()
+    await state.set_state(None)
     await message.answer("Cancelled. Your settings have been kept.", reply_markup=main_keyboard())
 
 
@@ -219,7 +219,7 @@ async def voice_button(callback: CallbackQuery, state: FSMContext) -> None:
     data = await state.get_data()
     voice_key = data.get("voice_key", "am")
     label = VOICE_CHOICES.get(voice_key, VOICE_CHOICES["am"])[0]
-    await state.set_state(GenerationStates.voice_text if voice_key == "am" else GenerationStates.english_voice_text)
+    await state.set_state(GenerationStates.voice_text)
     await callback.message.answer(f"🔊 <b>Voice Studio</b>\nSelected voice: {label}\nSend the text you want spoken (up to 600 characters).\nSend /cancel to stop.")
     await callback.answer()
 
@@ -300,7 +300,11 @@ async def english_voice_command(message: Message, state: FSMContext, ai: AIProvi
 async def amharic_voice_text(message: Message, state: FSMContext, ai: AIProviders) -> None:
     text = (message.text or "").strip()
     await state.set_state(None)
-    await make_voice(message, text, ai, "am-ET-MekdesNeural", "Amharic")
+    data = await state.get_data()
+    voice_key = data.get("voice_key", "am")
+    voice_label, voice_id = VOICE_CHOICES.get(voice_key, VOICE_CHOICES["am"])
+    language = "Amharic" if voice_key == "am" else "English"
+    await make_voice(message, text, ai, voice_id, language)
 
 
 @router.message(GenerationStates.english_voice_text, F.text)
@@ -314,7 +318,7 @@ async def english_voice_text(message: Message, state: FSMContext, ai: AIProvider
 async def voice_menu_text(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     voice_key = data.get("voice_key", "am")
-    await state.set_state(GenerationStates.voice_text if voice_key == "am" else GenerationStates.english_voice_text)
+    await state.set_state(GenerationStates.voice_text)
     await message.answer("🔊 Send the text you want spoken. Change the preferred voice in ⚙️ Settings.")
 
 
