@@ -13,6 +13,7 @@ from bot.database.db import engine, init_db
 from bot.handlers import admin, discovery, downloads, favorites, movies, search, series, start
 from bot.middlewares.throttling import RateLimitMiddleware
 from bot.services.multi_source_api import MultiSourceCatalog
+from bot.services.moviebox_api import MovieBoxCatalog
 from bot.services.tmdb_api import TMDBAPI
 from bot.services.download_manager import DownloadManager
 
@@ -44,12 +45,14 @@ async def main() -> None:
     })
     archive = MultiSourceCatalog(http)
     tmdb = TMDBAPI(http) if settings.tmdb_api_key else None
+    moviebox = MovieBoxCatalog()
     downloads_manager = DownloadManager()
     downloads_manager.session = http
     bot = Bot(settings.bot_token, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
     dp = Dispatcher()
     dp["archive"] = archive
     dp["tmdb"] = tmdb
+    dp["moviebox"] = moviebox
     dp["downloads"] = downloads_manager
     dp.message.middleware(RateLimitMiddleware())
     dp.callback_query.middleware(RateLimitMiddleware(0.25))
