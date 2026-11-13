@@ -98,7 +98,7 @@ class AIProviders:
                             "type": "text",
                             "text": "AI VOICE GENERATOR",
                             "style": "001",
-                            "duration": -2,
+                            "duration": 5,
                         },
                         {
                             "type": "voice",
