@@ -25,8 +25,8 @@ class Settings:
     admin_ids: set[int]
     database_url: str
     log_level: str = "INFO"
-    max_upload_bytes: int = 3 * 1024 * 1024 * 1024
-    telegram_upload_max_bytes: int = 49 * 1024 * 1024
+    max_upload_bytes: int = 3_000_000_000
+    telegram_upload_max_bytes: int = 49_000_000
     max_concurrent_downloads: int = 2
     archive_page_size: int = 10
     cache_ttl_seconds: int = 600
