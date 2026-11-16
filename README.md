@@ -31,7 +31,12 @@ These controls cannot be removed merely for testing. For development, use public
 - /popular — popular TorrentClaw movies
 - /recent — newly added TorrentClaw movies
 - /help — usage and download policy
+- /adminlogin — claim the one-time administrator setup using ADMIN_SETUP_CODE
 - /myid — show Telegram user ID
+
+## One-time administrator setup
+
+After deployment, open the bot and send `/adminlogin`, then enter the one-time `ADMIN_SETUP_CODE` (default `1212`). The first successful claim is stored in the database and cannot be repeated. Use a private chat and claim it immediately after deployment. Because `1212` is easy to guess, change `ADMIN_SETUP_CODE` to a private value in Railway before sharing the bot; the code is only a first-run bootstrap credential, not a per-login password. Existing `ADMIN_IDS` values remain administrators too.
 
 ## Environment
 
