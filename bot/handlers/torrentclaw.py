@@ -132,7 +132,18 @@ async def send_approved_magnet(callback: CallbackQuery, state: FSMContext, torre
     path = None
     try:
         path = await torrent_downloads.fetch(magnet, info_hash)
-        size_mb = path.stat().st_size / (1024 * 1024)
+        size_bytes = path.stat().st_size
+        if size_bytes > settings.telegram_upload_max_bytes:
+            await status_message.edit_text(
+                "This approved file is within the 3 GiB server-download safety limit, "
+                "but is too large for Telegram's upload limit. Open the approved magnet "
+                "in your own torrent client:\n"
+                f"<code>{html.escape(magnet)}</code>",
+                parse_mode="HTML",
+                disable_web_page_preview=True,
+            )
+            return
+        size_mb = size_bytes / (1024 * 1024)
         sent = await callback.message.answer_document(
             torrent_downloads.input_file(path, path.name),
             caption=f"🎬 {html.escape(title)}\nRights-checked torrent approved by the bot administrator.\nSize: {size_mb:.1f} MB",
