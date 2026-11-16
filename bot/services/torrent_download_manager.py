@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import shutil
 import uuid
@@ -84,7 +83,7 @@ class TorrentDownloadManager:
             if self.process.returncode is not None:
                 raise RuntimeError(f"aria2c exited during startup with code {self.process.returncode}")
             try:
-                await self._rpc("aria2.getVersion", authenticated=False)
+                await self._rpc("aria2.getVersion")
                 logger.info("Local aria2 torrent engine is ready")
                 return
             except (aiohttp.ClientError, asyncio.TimeoutError, TorrentDownloadError):
@@ -184,6 +183,7 @@ class TorrentDownloadManager:
                         actual_size = output.stat().st_size
                         if actual_size > settings.max_upload_bytes:
                             raise FileTooLarge(actual_size)
+                        await self._rpc("aria2.removeDownloadResult", [gid])
                         return output
                     if state in {"removed", "error"}:
                         raise TorrentDownloadError(str(status.get("errorMessage") or "Torrent task stopped"))
