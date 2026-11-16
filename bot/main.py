@@ -12,7 +12,8 @@ from aiogram.enums import ParseMode
 from aiogram.types import BotCommand
 
 from bot.config import settings
-from bot.handlers import start, torrentclaw
+from bot.database.db import init_db
+from bot.handlers import admin, start, torrentclaw
 from bot.services.torrentclaw_api import TorrentClaw
 from bot.services.torrent_download_manager import TorrentDownloadManager
 
@@ -30,6 +31,7 @@ async def health(_request: web.Request) -> web.Response:
             "recent_movies": True,
             "approved_download_buttons": bool(settings.torrentclaw_approved_infohashes),
             "server_downloads": settings.torrent_download_enabled,
+            "one_time_admin_setup": True,
         },
     })
 
@@ -50,6 +52,7 @@ async def main() -> None:
         level=getattr(logging, settings.log_level, logging.INFO),
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
     )
+    await init_db()
     settings.temp_dir.mkdir(parents=True, exist_ok=True)
     health_runner = await run_health_server()
     timeout = aiohttp.ClientTimeout(total=60, connect=15, sock_read=45)
@@ -64,6 +67,7 @@ async def main() -> None:
     dp["torrentclaw"] = TorrentClaw(http, settings.torrentclaw_api_key)
     dp["torrent_downloads"] = torrent_downloads
     dp.include_router(start.router)
+    dp.include_router(admin.router)
     dp.include_router(torrentclaw.router)
 
     try:
@@ -73,6 +77,8 @@ async def main() -> None:
             BotCommand(command="torrent", description="Search TorrentClaw movies"),
             BotCommand(command="popular", description="Popular TorrentClaw movies"),
             BotCommand(command="recent", description="New TorrentClaw movies"),
+            BotCommand(command="adminlogin", description="One-time administrator setup"),
+            BotCommand(command="admin", description="Administrator dashboard"),
             BotCommand(command="help", description="Show help"),
         ])
         await bot.delete_webhook(drop_pending_updates=True)
