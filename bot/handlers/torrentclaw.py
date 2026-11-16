@@ -13,6 +13,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from bot.config import settings
 from bot.services.torrentclaw_api import TorrentClawError
 from bot.services.download_manager import FileTooLarge
+from bot.services.torrent_download_manager import magnet_info_hash
 
 router = Router()
 logger = logging.getLogger(__name__)
@@ -77,7 +78,7 @@ async def _render(message: Message, state: FSMContext, torrentclaw, query: str):
             magnet = torrent.get("magnetUrl")
             # TorrentClaw does not return license evidence. A magnet is actionable
             # only when an operator has independently reviewed and allowlisted its hash.
-            if info_hash in approved and _HASH.fullmatch(info_hash) and isinstance(magnet, str) and magnet.startswith("magnet:?"):
+            if info_hash in approved and _HASH.fullmatch(info_hash) and isinstance(magnet, str) and magnet_info_hash(magnet) == info_hash:
                 magnet_map[info_hash] = {"magnet": magnet, "title": str(item.get("title") or "Approved movie")[:180]}
                 builder.row(InlineKeyboardButton(
                     text=f"⬇️ Download approved · {quality}"[:60],
@@ -107,7 +108,7 @@ async def send_approved_magnet(callback: CallbackQuery, state: FSMContext, torre
     entry = (data.get("torrentclaw_magnets") or {}).get(info_hash)
     magnet = entry.get("magnet") if isinstance(entry, dict) else None
     title = entry.get("title", "Approved movie") if isinstance(entry, dict) else "Approved movie"
-    if not isinstance(magnet, str) or not magnet.startswith("magnet:?"):
+    if not isinstance(magnet, str) or magnet_info_hash(magnet) != info_hash:
         await callback.answer("Search for this title again to refresh the download.", show_alert=True)
         return
 
