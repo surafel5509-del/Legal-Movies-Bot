@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-from pathlib import Path
 
 import aiohttp
 from aiohttp import web
@@ -31,7 +30,7 @@ async def health(_request: web.Request) -> web.Response:
         "features": {
             "movie_search": True,
             "tv_search": bool(settings.tmdb_api_key),
-            "licensed_downloads": True,
+            "licensed_downloads": settings.catalog_enabled,
             "favorites": True,
         },
         "metadata_provider": "TMDB" if settings.tmdb_api_key else "not_configured",
@@ -80,7 +79,7 @@ async def main() -> None:
     # Aiogram injects these named dependencies into handlers.
     dp["archive"] = archive
     dp["tmdb"] = TMDBAPI(http) if settings.tmdb_api_key else None
-    dp["moviebox"] = MovieBoxCatalog()
+    dp["moviebox"] = MovieBoxCatalog()  # metadata discovery only; never supplies file URLs
     dp["downloads"] = downloads_manager
 
     for router in (start.router, search.router, discovery.router, movies.router,
@@ -91,10 +90,10 @@ async def main() -> None:
         await bot.set_my_commands([
             BotCommand(command="start", description="Open the movie bot"),
             BotCommand(command="search", description="Search movies and legal catalogs"),
+            BotCommand(command="moviebox", description="Search metadata only"),
             BotCommand(command="series", description="Search TV series"),
             BotCommand(command="latest", description="Browse latest releases"),
             BotCommand(command="categories", description="Browse movie genres"),
-            BotCommand(command="favorites", description="View saved favorites"),
             BotCommand(command="help", description="Show help"),
         ])
         await bot.delete_webhook(drop_pending_updates=True)
