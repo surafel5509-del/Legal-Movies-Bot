@@ -109,7 +109,7 @@ async def download_movie(callback: CallbackQuery, downloads: DownloadManager, ar
                     await record_download(session, user, movie, "external_only")
                 await session.commit()
             await callback.message.answer(
-                "This authorized file is within the 3 GiB server-download safety limit, "
+                "This authorized file is within the 3 GB server-download safety limit, "
                 "but exceeds Telegram's upload limit. Open the authorized source page instead: "
                 f"{file_data['source_url']}",
                 disable_web_page_preview=True,
