@@ -1,50 +1,84 @@
-# AI Image & Voice Bot
+# Legal Movie Bot
 
-A Telegram bot that creates AI images and text-to-speech voiceover videos.
+Professional Telegram movie discovery with TMDB metadata, TV guides, favorites, licensed downloads, and TorrentClaw-powered torrent search.
 
 ## Features
 
-- `/image prompt` — generate an image with the free, community-powered AI Horde API.
-- `/voice text` — turn Amharic text into an MP4 voiceover using Microsoft Azure Amharic voice through JSON2Video.
-- `/voice_en text` — generate an English voiceover video.
-- Inline menu buttons, prompt entry, queue polling, clear error messages and a Railway `/health` endpoint.
-- No API key is required for basic AI Horde access. Anonymous requests use the public key and have the lowest queue priority.
-- JSON2Video requires a free API key. New accounts receive 600 non-renewable credits; free renders are limited to 60 seconds and may include a watermark.
+- Search movies and TV shows with TMDB metadata.
+- Browse trending/popular/latest titles, genres, trailers, and official watch-provider links.
+- Search TorrentClaw using `/torrent title`; display quality, codec, size, seeders, and quality score.
+- TorrentClaw download buttons remain disabled unless an administrator independently verifies redistribution rights and approves the exact release.
+- Optional local aria2 engine can download a single approved video file; disabled by default and configured not to seed.
+- Search open-media catalogs: Internet Archive, Library of Congress, Wikimedia Commons, and eligible YouTube Creative Commons Attribution videos.
+- Re-check supported source license and file metadata before licensed catalog downloads.
+- Favorites, search history, admin statistics, PostgreSQL/SQLite persistence, request timeouts, and Railway health endpoint.
 
-## Required environment variables
+## Download limits and Telegram delivery
 
-- `BOT_TOKEN` — Telegram bot token from BotFather.
-- `JSON2VIDEO_API_KEY` — API key from https://json2video.com/dashboard/apikeys (required for voice generation).
-- `AI_HORDE_API_KEY` — optional registered AI Horde key; defaults to the anonymous key `0000000000`.
-- `LOG_LEVEL` — optional, defaults to `INFO`.
+- Server-side downloads are capped at **3 GB** by default. Files larger than this are rejected.
+- Telegram's hosted Bot API upload cap is separate (configured to **49 MB** by default). Files above that limit are not uploaded through Telegram; users receive the authorized source page or approved magnet so they can retrieve the file with a suitable client.
+- Set `MAX_UPLOAD_BYTES` to change the server-side safety ceiling and `TELEGRAM_UPLOAD_MAX_BYTES` to configure the bot's Telegram upload ceiling. Raising the Telegram value does not raise Telegram's own API limit.
 
-Never commit API keys or paste them into public chats. Add them in Railway → Service → Variables.
+## TorrentClaw behavior and rights
+
+TorrentClaw search results provide torrent metadata and magnet URLs but do not establish copyright ownership or distribution permission. A search result alone never enables a download button. An administrator must independently verify that the work is public domain, openly licensed, or otherwise authorized for redistribution, then add its exact 40-character info hash to `TORRENTCLAW_APPROVED_INFOHASHES`. The hash is used to bind approval to the exact torrent release and prevent a different magnet from being substituted; it is not evidence of copyright permission by itself.
+
+By default the bot sends an approved magnet link to the user's compatible torrent client. To enable server-side transfer, set `TORRENT_DOWNLOAD_ENABLED=true` only after the approved list contains releases with independently verified redistribution rights. The Dockerfile installs aria2 and the bot starts it with RPC bound to localhost only. The engine re-checks the approved magnet, rejects multi-file and non-video outputs, enforces the 3 GB server-side limit, and disables seeding. The feature is off by default.
+
+Do not approve hashes based only on the title, source reputation, seed count, or AI matching score. Verify the rights for the exact release and territory.
 
 ## Commands
 
-- `/start` — open the AI Image & Voice menu.
-- `/image a cinematic mountain landscape` — generate an image.
-- `/voice ሰላም እንዴት ነህ?` — Amharic voiceover (Mekdes).
-- `/voice_en Hello there` — English voiceover.
-- `/help` — usage and provider details.
+- `/start` — open the main menu
+- `/search title` — search licensed catalogs and movie metadata
+- `/torrent title` — search TorrentClaw
+- `/moviebox title` — metadata-only discovery
+- `/series title` — search TV series
+- `/latest` — browse current releases
+- `/categories` — browse genres
+- `/admin` — admin statistics
+- `/myid` — show Telegram user ID
+- `/help` — usage and rights information
 
-## Free-tier notes
+## Environment
 
-AI Horde is a volunteer-run service, so anonymous requests may wait in a queue. A free registered key improves priority.
+- `BOT_TOKEN` — required Telegram bot token.
+- `DATABASE_URL` — Railway PostgreSQL or local SQLite.
+- `TMDB_API_KEY` — optional TMDB metadata key.
+- `TMDB_WATCH_REGION` — two-letter provider region (default recommendation: `ET`).
+- `TORRENTCLAW_API_KEY` — optional TorrentClaw key for higher rate limits.
+- `TORRENTCLAW_APPROVED_INFOHASHES` — comma-separated exact hashes reviewed for authorized redistribution; leave empty to disable TorrentClaw download buttons.
+- `TORRENT_DOWNLOAD_ENABLED` — set to `true` to enable local aria2 server-side downloads for approved hashes (default `false`).
+- `ARIA2_RPC_SECRET` — optional local aria2 RPC secret; a random secret is generated when blank. RPC listens only on localhost.
+- `ARIA2_RPC_PORT` — local aria2 RPC port (default `6800`).
+- `ADMIN_IDS` — comma-separated Telegram numeric admin IDs.
+- `ARCHIVE_CATALOG_ENABLED` — enable/disable open-media catalog downloads.
+- `MAX_UPLOAD_BYTES` — server-side download safety cap (default 3 GB).
+- `TELEGRAM_UPLOAD_MAX_BYTES` — Telegram upload cap (default 49 MiB).
+- `MAX_CONCURRENT_DOWNLOADS`, `ARCHIVE_PAGE_SIZE`, `CACHE_TTL_SECONDS`, `REQUEST_TIMEOUT_SECONDS`, `TEMP_DIR`, `LOG_LEVEL` — operational settings.
 
-JSON2Video's free plan currently includes 600 one-time credits, with a 60-second maximum per render. The bot returns an MP4 containing the synthesized voice. Downloading a standalone MP3 audio track is a paid-plan feature; free renders may carry a watermark. The app does not purchase credits or upgrade plans automatically.
+Never commit API keys or Telegram tokens. Configure secrets in Railway → Service → Variables.
 
-## Local run
+## Local development
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env
-# Set BOT_TOKEN and JSON2VIDEO_API_KEY in .env
 python -m bot.main
 ```
 
-## Safety
+Run tests:
 
-The bot is for lawful narration of text the user is authorized to use. It does not offer voice cloning, celebrity imitation, impersonation or deceptive audio generation.
+```bash
+BOT_TOKEN=123456:TEST DATABASE_URL=sqlite+aiosqlite:///:memory: python -m pytest -q
+```
+
+## Railway
+
+The service starts with `python -m bot.main` and exposes `/health` on the assigned `PORT`. Railway builds the included Dockerfile, which installs aria2. Configure required variables in Railway. Keep torrent downloads disabled until the approved-hash list is populated with independently rights-verified releases. Use PostgreSQL or a persistent volume for SQLite.
+
+## Attribution
+
+This product uses the TMDB API but is not endorsed or certified by TMDB. TorrentClaw is an independent search service.

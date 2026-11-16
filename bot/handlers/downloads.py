@@ -101,6 +101,20 @@ async def download_movie(callback: CallbackQuery, downloads: DownloadManager, ar
         path = await downloads.fetch(
             file_data["url"], file_data["filename"], expected_license=file_data["license"]
         )
+        if path.stat().st_size > settings.telegram_upload_max_bytes:
+            async with Session() as session:
+                user = await session.scalar(select(User).where(User.telegram_id == callback.from_user.id))
+                movie = await session.get(Movie, file_data["movie_id"])
+                if user and movie:
+                    await record_download(session, user, movie, "external_only")
+                await session.commit()
+            await callback.message.answer(
+                "This authorized file is within the 3 GB server-download safety limit, "
+                "but exceeds Telegram's upload limit. Open the authorized source page instead: "
+                f"{file_data['source_url']}",
+                disable_web_page_preview=True,
+            )
+            return
         upload_filename = Path(file_data["filename"]).stem + path.suffix
         try:
             metadata = json.loads(file_data["metadata_json"] or "{}")
@@ -138,7 +152,7 @@ async def download_movie(callback: CallbackQuery, downloads: DownloadManager, ar
             await session.commit()
         size = f"{exc.size / (1024 * 1024):.1f} MB" if exc.size else "larger than the configured upload cap"
         await callback.message.answer(
-            f"This authorized file is {size}, above this bot's Telegram upload limit ({settings.max_upload_bytes / (1024 * 1024):.0f} MB). I have not uploaded it.\n\nOpen the authorized source page: {file_data['source_url']}",
+            f"This authorized file is {size}, above this bot's server download limit ({settings.max_upload_bytes / (1024 * 1024):.0f} MB). I have not uploaded it.\n\nOpen the authorized source page: {file_data['source_url']}",
             disable_web_page_preview=True,
         )
     except Exception as exc:

@@ -5,18 +5,18 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 def home(lang: str = "en") -> InlineKeyboardMarkup:
     labels = {
         "en": [
-            ("🔎 Search Movies", "search"), ("📺 Search TV Series", "series"),
-            ("🎭 Categories", "categories"), ("🔥 Popular Movies", "popular"),
-            ("📈 Trending Movies", "trending"), ("🆕 Latest Movies", "latest"),
-            ("❤️ Favorites", "favorites"), ("🌐 Language", "language"),
-            ("ℹ️ Help", "help"), ("About", "about"),
+            ("🔎 Search Movies", "search"), ("🧲 TorrentClaw Search", "torrent"),
+            ("📺 Search TV Series", "series"), ("🎭 Categories", "categories"),
+            ("🔥 Popular Movies", "popular"), ("📈 Trending Movies", "trending"),
+            ("🆕 Latest Movies", "latest"), ("❤️ Favorites", "favorites"),
+            ("🌐 Language", "language"), ("ℹ️ Help", "help"), ("About", "about"),
         ],
         "am": [
-            ("🔎 ፊልም ፈልግ", "search"), ("📺 ተከታታይ ፊልም ፈልግ", "series"),
-            ("🎭 ምድቦች", "categories"), ("🔥 ተወዳጅ ፊልሞች", "popular"),
-            ("📈 ትሬንዲንግ ፊልሞች", "trending"), ("🆕 አዳዲስ ፊልሞች", "latest"),
-            ("❤️ ተወዳጆች", "favorites"), ("🌐 ቋንቋ", "language"),
-            ("ℹ️ እገዛ", "help"), ("ስለ ቦቱ", "about"),
+            ("🔎 ፊልም ፈልግ", "search"), ("🧲 TorrentClaw ፍለጋ", "torrent"),
+            ("📺 ተከታታይ ፊልም ፈልግ", "series"), ("🎭 ምድቦች", "categories"),
+            ("🔥 ተወዳጅ ፊልሞች", "popular"), ("📈 ትሬንዲንግ ፊልሞች", "trending"),
+            ("🆕 አዳዲስ ፊልሞች", "latest"), ("❤️ ተወዳጆች", "favorites"),
+            ("🌐 ቋንቋ", "language"), ("ℹ️ እገዛ", "help"), ("ስለ ቦቱ", "about"),
         ],
     }
     builder = InlineKeyboardBuilder()
