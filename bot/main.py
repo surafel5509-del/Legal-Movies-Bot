@@ -20,6 +20,7 @@ from bot.services.multi_source_api import MultiSourceCatalog
 from bot.services.moviebox_api import MovieBoxCatalog
 from bot.services.tmdb_api import TMDBAPI
 from bot.services.torrentclaw_api import TorrentClaw
+from bot.services.torrent_download_manager import TorrentDownloadManager
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +35,7 @@ async def health(_request: web.Request) -> web.Response:
             "licensed_downloads": settings.catalog_enabled,
             "torrentclaw_search": True,
             "approved_torrent_buttons": bool(settings.torrentclaw_approved_infohashes),
+            "torrent_server_downloads": settings.torrent_download_enabled,
             "favorites": True,
         },
         "metadata_provider": "TMDB" if settings.tmdb_api_key else "not_configured",
@@ -73,12 +75,15 @@ async def main() -> None:
     archive = MultiSourceCatalog(http)
     downloads_manager = DownloadManager()
     downloads_manager.session = http
+    torrent_downloads = TorrentDownloadManager(http)
+    await torrent_downloads.start()
 
     dp["archive"] = archive
     dp["tmdb"] = TMDBAPI(http) if settings.tmdb_api_key else None
     dp["moviebox"] = MovieBoxCatalog()
     dp["downloads"] = downloads_manager
     dp["torrentclaw"] = TorrentClaw(http, settings.torrentclaw_api_key)
+    dp["torrent_downloads"] = torrent_downloads
 
     for router in (start.router, search.router, torrentclaw.router, discovery.router,
                    movies.router, series.router, favorites.router, downloads.router, admin.router):
@@ -99,6 +104,7 @@ async def main() -> None:
         logger.info("Legal Movie Bot is starting")
         await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
     finally:
+        await torrent_downloads.close()
         await http.close()
         await bot.session.close()
         await health_runner.cleanup()
