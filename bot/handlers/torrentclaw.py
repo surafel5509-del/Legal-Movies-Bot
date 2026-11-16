@@ -283,7 +283,7 @@ async def select_movie(callback: CallbackQuery, state: FSMContext):
     else:
         lines.extend(["", "<b>Choose an approved quality below.</b>"])
 
-    await state.update_data(torrentclaw_magnets=magnet_map, torrentclaw_selected_hash=None)
+    await state.update_data(torrentclaw_magnets=magnet_map, torrentclaw_selected_hash=None, torrentclaw_selected_movie_key=key)
     builder.row(InlineKeyboardButton(text="⬅️ Back to movie results", callback_data="nav:torrent"))
     builder.row(InlineKeyboardButton(text="🏠 Home", callback_data="nav:home"))
     await callback.message.answer("\\n".join(lines)[:3900], reply_markup=builder.as_markup(), parse_mode="HTML")
@@ -306,7 +306,7 @@ async def select_torrent_quality(callback: CallbackQuery, state: FSMContext):
     await state.update_data(torrentclaw_selected_hash=info_hash)
     builder = InlineKeyboardBuilder()
     builder.button(text="⬇️ Download selected movie", callback_data=f"torrentdl:{info_hash}")
-    builder.button(text="⬅️ Choose another quality", callback_data="moviepick:0")
+    builder.button(text="⬅️ Choose another quality", callback_data=f"moviepick:{data.get('torrentclaw_selected_movie_key', '0')}")
     builder.adjust(1)
     await callback.message.answer(
         f"Selected: <b>{html.escape(entry.get('title', 'Movie'))}</b>\n"
