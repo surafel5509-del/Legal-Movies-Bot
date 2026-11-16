@@ -9,6 +9,15 @@ def _csv_ints(value: str) -> set[int]:
     return {int(item.strip()) for item in value.split(",") if item.strip()}
 
 
+def _csv_hashes(value: str) -> set[str]:
+    import re
+    hashes = {item.strip().lower() for item in value.split(",") if item.strip()}
+    invalid = [item for item in hashes if not re.fullmatch(r"[a-f0-9]{40}", item)]
+    if invalid:
+        raise ValueError("TORRENTCLAW_APPROVED_INFOHASHES must contain only 40-character hexadecimal info hashes")
+    return hashes
+
+
 @dataclass(frozen=True)
 class Settings:
     bot_token: str
@@ -25,6 +34,8 @@ class Settings:
     active_days: int = 30
     tmdb_api_key: str = ""
     tmdb_watch_region: str = "US"
+    torrentclaw_api_key: str = ""
+    torrentclaw_approved_infohashes: set[str] | None = None
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -54,6 +65,8 @@ class Settings:
             active_days=max(1, int(os.getenv("ACTIVE_DAYS", "30"))),
             tmdb_api_key=os.getenv("TMDB_API_KEY", "").strip(),
             tmdb_watch_region=os.getenv("TMDB_WATCH_REGION", "US").strip().upper()[:2] or "US",
+            torrentclaw_api_key=os.getenv("TORRENTCLAW_API_KEY", "").strip(),
+            torrentclaw_approved_infohashes=_csv_hashes(os.getenv("TORRENTCLAW_APPROVED_INFOHASHES", "")),
         )
 
 
