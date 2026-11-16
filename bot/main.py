@@ -14,11 +14,12 @@ from aiogram.types import BotCommand
 
 from bot.config import settings
 from bot.database.db import engine, init_db
-from bot.handlers import admin, discovery, downloads, favorites, movies, search, series, start
+from bot.handlers import admin, discovery, downloads, favorites, movies, search, series, start, torrentclaw
 from bot.services.download_manager import DownloadManager
 from bot.services.multi_source_api import MultiSourceCatalog
 from bot.services.moviebox_api import MovieBoxCatalog
 from bot.services.tmdb_api import TMDBAPI
+from bot.services.torrentclaw_api import TorrentClaw
 
 logger = logging.getLogger(__name__)
 
@@ -31,15 +32,12 @@ async def health(_request: web.Request) -> web.Response:
             "movie_search": True,
             "tv_search": bool(settings.tmdb_api_key),
             "licensed_downloads": settings.catalog_enabled,
+            "torrentclaw_search": True,
+            "approved_torrent_buttons": bool(settings.torrentclaw_approved_infohashes),
             "favorites": True,
         },
         "metadata_provider": "TMDB" if settings.tmdb_api_key else "not_configured",
-        "download_catalogs": [
-            "Internet Archive",
-            "Library of Congress",
-            "Wikimedia Commons",
-            "YouTube Creative Commons",
-        ] if settings.catalog_enabled else [],
+        "torrentclaw": "configured",
     })
 
 
@@ -76,21 +74,22 @@ async def main() -> None:
     downloads_manager = DownloadManager()
     downloads_manager.session = http
 
-    # Aiogram injects these named dependencies into handlers.
     dp["archive"] = archive
     dp["tmdb"] = TMDBAPI(http) if settings.tmdb_api_key else None
-    dp["moviebox"] = MovieBoxCatalog()  # metadata discovery only; never supplies file URLs
+    dp["moviebox"] = MovieBoxCatalog()
     dp["downloads"] = downloads_manager
+    dp["torrentclaw"] = TorrentClaw(http, settings.torrentclaw_api_key)
 
-    for router in (start.router, search.router, discovery.router, movies.router,
-                   series.router, favorites.router, downloads.router, admin.router):
+    for router in (start.router, search.router, torrentclaw.router, discovery.router,
+                   movies.router, series.router, favorites.router, downloads.router, admin.router):
         dp.include_router(router)
 
     try:
         await bot.set_my_commands([
             BotCommand(command="start", description="Open the movie bot"),
-            BotCommand(command="search", description="Search movies and legal catalogs"),
-            BotCommand(command="moviebox", description="Search metadata only"),
+            BotCommand(command="search", description="Search licensed catalogs"),
+            BotCommand(command="torrent", description="Search TorrentClaw releases"),
+            BotCommand(command="moviebox", description="Search movie metadata"),
             BotCommand(command="series", description="Search TV series"),
             BotCommand(command="latest", description="Browse latest releases"),
             BotCommand(command="categories", description="Browse movie genres"),
