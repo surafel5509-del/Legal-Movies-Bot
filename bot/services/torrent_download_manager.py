@@ -57,6 +57,8 @@ class TorrentDownloadManager:
     async def start(self) -> None:
         if not self.enabled:
             return
+        if not settings.torrentclaw_approved_infohashes:
+            raise RuntimeError("Torrent downloads are enabled but no approved info hashes are configured")
         executable = shutil.which("aria2c")
         if not executable:
             raise RuntimeError("Torrent downloads are enabled but aria2c is not installed")
