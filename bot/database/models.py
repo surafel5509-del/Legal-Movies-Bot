@@ -23,6 +23,14 @@ class User(Base):
     last_active: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
 
 
+class AdminClaim(Base):
+    """One-time first-admin claim, persisted in the database."""
+    __tablename__ = "admin_claim"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
+    telegram_id: Mapped[int] = mapped_column(BigInteger, unique=True, index=True)
+    claimed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
 class Movie(Base):
     __tablename__ = "movies"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
