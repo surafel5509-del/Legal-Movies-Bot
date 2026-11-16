@@ -85,21 +85,25 @@ async def torrent_menu(callback: CallbackQuery, state: FSMContext):
 
 
 @router.message(Command("popular"))
-@router.callback_query(F.data == "nav:popular")
-async def popular_movies(event, state: FSMContext, torrentclaw):
-    message = event if isinstance(event, Message) else event.message
-    if isinstance(event, CallbackQuery):
-        await event.answer()
+async def popular_command(message: Message, state: FSMContext, torrentclaw):
     await _render_collection(message, state, torrentclaw, "popular")
 
 
+@router.callback_query(F.data == "nav:popular")
+async def popular_callback(callback: CallbackQuery, state: FSMContext, torrentclaw):
+    await callback.answer()
+    await _render_collection(callback.message, state, torrentclaw, "popular")
+
+
 @router.message(Command("recent"))
-@router.callback_query(F.data == "nav:recent")
-async def recent_movies(event, state: FSMContext, torrentclaw):
-    message = event if isinstance(event, Message) else event.message
-    if isinstance(event, CallbackQuery):
-        await event.answer()
+async def recent_command(message: Message, state: FSMContext, torrentclaw):
     await _render_collection(message, state, torrentclaw, "recent")
+
+
+@router.callback_query(F.data == "nav:recent")
+async def recent_callback(callback: CallbackQuery, state: FSMContext, torrentclaw):
+    await callback.answer()
+    await _render_collection(callback.message, state, torrentclaw, "recent")
 
 
 async def _render_collection(message: Message, state: FSMContext, torrentclaw, kind: str):
