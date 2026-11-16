@@ -135,7 +135,7 @@ async def send_approved_magnet(callback: CallbackQuery, state: FSMContext, torre
         size_bytes = path.stat().st_size
         if size_bytes > settings.telegram_upload_max_bytes:
             await status_message.edit_text(
-                "This approved file is within the 3 GiB server-download safety limit, "
+                "This approved file is within the 3 GB server-download safety limit, "
                 "but is too large for Telegram's upload limit. Open the approved magnet "
                 "in your own torrent client:\n"
                 f"<code>{html.escape(magnet)}</code>",
@@ -157,7 +157,7 @@ async def send_approved_magnet(callback: CallbackQuery, state: FSMContext, torre
     except FileTooLarge as exc:
         size = f"{exc.size / (1024 * 1024):.1f} MB" if exc.size else "above the configured limit"
         await status_message.edit_text(
-            f"This approved torrent is {size}, above the bot's Telegram upload limit. No file was sent."
+            f"This approved torrent is {size}, above the 3 GB server-download safety limit. No file was sent."
         )
     except Exception as exc:
         logger.exception("Approved torrent transfer failed for %s: %s", info_hash, exc)
