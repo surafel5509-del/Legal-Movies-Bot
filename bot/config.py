@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import os
+import secrets
 from pathlib import Path
 
 
@@ -36,6 +37,9 @@ class Settings:
     tmdb_watch_region: str = "US"
     torrentclaw_api_key: str = ""
     torrentclaw_approved_infohashes: set[str] | None = None
+    torrent_download_enabled: bool = False
+    aria2_rpc_secret: str = ""
+    aria2_rpc_port: int = 6800
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -67,6 +71,9 @@ class Settings:
             tmdb_watch_region=os.getenv("TMDB_WATCH_REGION", "US").strip().upper()[:2] or "US",
             torrentclaw_api_key=os.getenv("TORRENTCLAW_API_KEY", "").strip(),
             torrentclaw_approved_infohashes=_csv_hashes(os.getenv("TORRENTCLAW_APPROVED_INFOHASHES", "")),
+            torrent_download_enabled=os.getenv("TORRENT_DOWNLOAD_ENABLED", "false").lower() in {"1", "true", "yes"},
+            aria2_rpc_secret=os.getenv("ARIA2_RPC_SECRET", "").strip() or secrets.token_urlsafe(32),
+            aria2_rpc_port=max(1024, min(65535, int(os.getenv("ARIA2_RPC_PORT", "6800")))),
         )
 
 
