@@ -3,21 +3,28 @@ from __future__ import annotations
 import html
 import logging
 import re
+from difflib import SequenceMatcher
 
 from aiogram import F, Router
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, InlineKeyboardButton, Message
+from aiogram.fsm.state import State, StatesGroup
+from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from bot.config import settings
-from bot.services.torrentclaw_api import TorrentClawError
 from bot.services.download_manager import FileTooLarge
+from bot.services.torrentclaw_api import TorrentClawError
 from bot.services.torrent_download_manager import magnet_info_hash
 
 router = Router()
 logger = logging.getLogger(__name__)
-_HASH = re.compile(r"^[a-fA-F0-9]{40}$")
+_HASH = re.compile(r"^[a-f0-9]{40}$")
+_YEAR = re.compile(r"\b(18\d{2}|19\d{2}|20\d{2}|2100)\b")
+
+
+class SearchState(StatesGroup):
+    waiting_for_query = State()
 
 
 def _safe_int(value, default=0):
@@ -27,46 +34,183 @@ def _safe_int(value, default=0):
         return default
 
 
+def _title_key(value: str) -> str:
+    value = _YEAR.sub(" ", value or "")
+    return " ".join(re.findall(r"[a-z0-9]+", value.casefold()))
+
+
+def _extract_query(value: str) -> tuple[str, int | None]:
+    match = _YEAR.search(value or "")
+    year = int(match.group(1)) if match else None
+    query = _YEAR.sub(" ", value or "")
+    query = " ".join(query.split()).strip()
+    return query, year
+
+
+def _title_score(query: str, title: str) -> float:
+    left, right = _title_key(query), _title_key(title)
+    if not left or not right:
+        return 0.0
+    if left == right:
+        return 1.0
+    return SequenceMatcher(None, left, right).ratio()
+
+
 @router.message(Command("torrent"))
 async def torrent_search(message: Message, state: FSMContext, torrentclaw):
     query = (message.text or "").partition(" ")[2].strip()
     if len(query) < 2:
-        await message.answer("Usage: /torrent movie title\nExample: /torrent Night of the Living Dead")
+        await state.set_state(SearchState.waiting_for_query)
+        await message.answer("Send a movie title. Add its release year for a more precise match.\nExample: Night of the Living Dead 1968")
         return
-    await _render(message, state, torrentclaw, query)
+    await state.clear()
+    await _render_search(message, state, torrentclaw, query)
+
+
+@router.message(SearchState.waiting_for_query)
+async def torrent_search_text(message: Message, state: FSMContext, torrentclaw):
+    query = (message.text or "").strip()
+    if len(query) < 2:
+        await message.answer("Please enter at least two characters.")
+        return
+    await state.clear()
+    await _render_search(message, state, torrentclaw, query)
 
 
 @router.callback_query(F.data == "nav:torrent")
 async def torrent_menu(callback: CallbackQuery, state: FSMContext):
-    await callback.message.answer("Send a movie or series title, or use /torrent title.")
+    await state.set_state(SearchState.waiting_for_query)
+    await callback.message.answer("Send a movie title. Include the release year to avoid similarly named movies.")
     await callback.answer()
 
 
-async def _render(message: Message, state: FSMContext, torrentclaw, query: str):
+@router.message(Command("popular"))
+@router.callback_query(F.data == "nav:popular")
+async def popular_movies(event, state: FSMContext, torrentclaw):
+    message = event if isinstance(event, Message) else event.message
+    if isinstance(event, CallbackQuery):
+        await event.answer()
+    await _render_collection(message, state, torrentclaw, "popular")
+
+
+@router.message(Command("recent"))
+@router.callback_query(F.data == "nav:recent")
+async def recent_movies(event, state: FSMContext, torrentclaw):
+    message = event if isinstance(event, Message) else event.message
+    if isinstance(event, CallbackQuery):
+        await event.answer()
+    await _render_collection(message, state, torrentclaw, "recent")
+
+
+async def _render_collection(message: Message, state: FSMContext, torrentclaw, kind: str):
     try:
-        payload = await torrentclaw.search(query, limit=10)
+        payload = await (torrentclaw.popular(limit=12) if kind == "popular" else torrentclaw.recent(limit=12))
     except TorrentClawError as exc:
         await message.answer(str(exc))
         return
-    results = payload.get("results") or []
-    if not results:
-        await message.answer("TorrentClaw found no matches for that title.")
+    items = [
+        item for item in payload.get("items", [])
+        if isinstance(item, dict) and item.get("title")
+        and str(item.get("contentType") or "movie").lower() == "movie"
+    ]
+    if not items:
+        await message.answer("TorrentClaw has no movie entries in this list right now.")
         return
-
-    approved = settings.torrentclaw_approved_infohashes
-    magnet_map: dict[str, dict[str, str]] = {}
+    lookup = {}
     builder = InlineKeyboardBuilder()
-    lines = [f"<b>🔎 TorrentClaw results</b> · {html.escape(query[:80])}", ""]
-    shown = 0
-    for item in results[:10]:
-        title = html.escape(str(item.get("title") or "Untitled")[:100])
+    lines = ["<b>🔥 TorrentClaw popular movies</b>" if kind == "popular" else "<b>🆕 Newly added TorrentClaw movies</b>", ""]
+    for item in items[:12]:
+        item_id = str(item.get("id") or "")
+        if not item_id:
+            continue
+        title = str(item.get("title") or "Untitled")[:100]
         year = item.get("year")
         rating = item.get("ratingImdb") or item.get("ratingTmdb")
-        lines.append(f"<b>{title}</b>{f' ({year})' if year else ''}")
+        seeders = _safe_int(item.get("maxSeeders"))
+        label = f"{title} ({year})" if year else title
+        line = f"• <b>{html.escape(label)}</b>"
+        if rating:
+            line += f" · ⭐ {html.escape(str(rating))}"
+        if seeders:
+            line += f" · {seeders} seeders"
+        lines.append(line)
+        lookup[item_id] = {"title": title, "year": year}
+        builder.row(InlineKeyboardButton(text=f"🔎 Find releases: {label}"[:60], callback_data=f"popular:{item_id}"))
+    await state.update_data(torrentclaw_collection=lookup)
+    builder.row(InlineKeyboardButton(text="🏠 Home", callback_data="nav:home"))
+    await message.answer("\n".join(lines)[:3900], reply_markup=builder.as_markup(), parse_mode="HTML")
+
+
+@router.callback_query(F.data.startswith("popular:"))
+async def search_collection_movie(callback: CallbackQuery, state: FSMContext, torrentclaw):
+    item_id = callback.data.split(":", 1)[1]
+    data = await state.get_data()
+    item = (data.get("torrentclaw_collection") or {}).get(item_id)
+    if not item:
+        await callback.answer("Open the popular or recent list again to refresh it.", show_alert=True)
+        return
+    query = f"{item['title']} {item['year']}" if item.get("year") else item["title"]
+    await callback.answer("Finding matching TorrentClaw releases…")
+    await _render_search(callback.message, state, torrentclaw, query)
+
+
+async def _render_search(message: Message, state: FSMContext, torrentclaw, raw_query: str):
+    query, year = _extract_query(raw_query)
+    if len(query) < 2:
+        await message.answer("Enter a movie title with at least two characters.")
+        return
+    try:
+        payload = await torrentclaw.search(query, limit=50, content_type="movie", year=year)
+    except (TorrentClawError, ValueError) as exc:
+        await message.answer(str(exc))
+        return
+
+    candidates = [
+        item for item in payload.get("results", [])
+        if isinstance(item, dict) and item.get("title")
+        and str(item.get("contentType") or "movie").lower() == "movie"
+    ]
+    if year:
+        candidates = [item for item in candidates if _safe_int(item.get("year")) == year]
+    scored = [(item, _title_score(query, str(item.get("title") or ""))) for item in candidates]
+    exact = [(item, score) for item, score in scored if score == 1.0]
+    selected = exact if exact else [(item, score) for item, score in scored if score >= 0.72]
+    selected.sort(key=lambda pair: (pair[1], _safe_int(pair[0].get("maxSeeders"))), reverse=True)
+    selected = selected[:6]
+    if not selected:
+        await message.answer(
+            f"No close movie-title match found in TorrentClaw for <b>{html.escape(query)}</b>"
+            + (f" ({year})" if year else "")
+            + ". Try the original title or add the correct year.",
+            parse_mode="HTML",
+        )
+        return
+
+    approved = settings.torrentclaw_approved_infohashes or set()
+    magnet_map: dict[str, dict[str, str]] = {}
+    builder = InlineKeyboardBuilder()
+    lines = [f"<b>🔎 TorrentClaw movie matches</b> · {html.escape(query[:80])}", ""]
+    if year:
+        lines[0] += f" ({year})"
+    if not exact:
+        lines.append("<i>Closest title matches — check the year before choosing.</i>")
+        lines.append("")
+    buttons = 0
+    for item, _score in selected:
+        title_raw = str(item.get("title") or "Untitled")[:100]
+        title = html.escape(title_raw)
+        item_year = item.get("year")
+        rating = item.get("ratingImdb") or item.get("ratingTmdb")
+        lines.append(f"<b>{title}</b>{f' ({item_year})' if item_year else ''}")
         if rating:
             lines.append(f"⭐ Rating: {html.escape(str(rating))}")
         torrents = item.get("torrents") or []
-        for torrent in torrents[:5]:
+        torrents = sorted(
+            (t for t in torrents if isinstance(t, dict)),
+            key=lambda t: (_safe_int(t.get("qualityScore")), _safe_int(t.get("seeders"))),
+            reverse=True,
+        )
+        for torrent in torrents[:4]:
             info_hash = str(torrent.get("infoHash") or "").lower()
             quality = html.escape(str(torrent.get("quality") or "Unknown"))
             codec = html.escape(str(torrent.get("codec") or ""))
@@ -76,50 +220,56 @@ async def _render(message: Message, state: FSMContext, torrentclaw, query: str):
             score = _safe_int(torrent.get("qualityScore"))
             lines.append(f"  • {quality} {codec} · {size} · {seeders} seeders · score {score}/100")
             magnet = torrent.get("magnetUrl")
-            # TorrentClaw does not return license evidence. A magnet is actionable
-            # only when an operator has independently reviewed and allowlisted its hash.
-            if info_hash in approved and _HASH.fullmatch(info_hash) and isinstance(magnet, str) and magnet_info_hash(magnet) == info_hash:
-                magnet_map[info_hash] = {"magnet": magnet, "title": str(item.get("title") or "Approved movie")[:180]}
+            if (
+                info_hash in approved and _HASH.fullmatch(info_hash)
+                and isinstance(magnet, str) and magnet_info_hash(magnet) == info_hash
+            ):
+                magnet_map[info_hash] = {"magnet": magnet, "title": title_raw}
                 builder.row(InlineKeyboardButton(
                     text=f"⬇️ Download approved · {quality}"[:60],
                     callback_data=f"torrentdl:{info_hash}",
                 ))
-                shown += 1
+                buttons += 1
         lines.append("")
+
     await state.update_data(torrentclaw_magnets=magnet_map)
-    if shown == 0:
+    if not buttons:
         lines.extend([
-            "No download buttons are enabled for these results yet.",
-            "TorrentClaw search results do not prove distribution rights. An administrator must independently verify a torrent's license/permission and add its info hash to TORRENTCLAW_APPROVED_INFOHASHES before enabling its button.",
+            "No download button is available for these releases yet.",
+            "Downloads are activated only after an administrator independently verifies redistribution permission for the exact release and approves its info hash.",
         ])
     else:
-        lines.append("Download buttons are shown only for hashes reviewed and approved by the administrator.")
-    await message.answer("\n".join(lines)[:4000], reply_markup=builder.as_markup() if shown else None,
-                         parse_mode="HTML", disable_web_page_preview=True)
+        lines.append("Download buttons are available for approved releases only.")
+    builder.row(InlineKeyboardButton(text="🏠 Home", callback_data="nav:home"))
+    await message.answer(
+        "\n".join(lines)[:3900],
+        reply_markup=builder.as_markup(),
+        parse_mode="HTML",
+        disable_web_page_preview=True,
+    )
 
 
 @router.callback_query(F.data.startswith("torrentdl:"))
 async def send_approved_magnet(callback: CallbackQuery, state: FSMContext, torrentclaw, torrent_downloads):
     info_hash = callback.data.split(":", 1)[1].lower()
-    if not _HASH.fullmatch(info_hash) or info_hash not in settings.torrentclaw_approved_infohashes:
-        await callback.answer("This torrent is not approved for download.", show_alert=True)
+    if not _HASH.fullmatch(info_hash) or info_hash not in (settings.torrentclaw_approved_infohashes or set()):
+        await callback.answer("This release is not approved for distribution.", show_alert=True)
         return
     data = await state.get_data()
     entry = (data.get("torrentclaw_magnets") or {}).get(info_hash)
     magnet = entry.get("magnet") if isinstance(entry, dict) else None
     title = entry.get("title", "Approved movie") if isinstance(entry, dict) else "Approved movie"
     if not isinstance(magnet, str) or magnet_info_hash(magnet) != info_hash:
-        await callback.answer("Search for this title again to refresh the download.", show_alert=True)
+        await callback.answer("Search for this title again to refresh the release.", show_alert=True)
         return
 
     if not torrent_downloads.enabled:
         try:
             await torrentclaw.track(info_hash, "magnet")
         except Exception:
-            logger.info("TorrentClaw tracking request failed for approved hash %s", info_hash)
+            logger.info("TorrentClaw tracking failed for approved hash %s", info_hash)
         await callback.message.answer(
-            "⬇️ <b>Approved torrent magnet</b>\n"
-            "Server-side downloads are disabled. Open this link in a compatible torrent client:\n"
+            "⬇️ <b>Approved magnet link</b>\nOpen this link in a compatible torrent client:\n"
             f"<code>{html.escape(magnet)}</code>",
             parse_mode="HTML",
             disable_web_page_preview=True,
@@ -135,35 +285,30 @@ async def send_approved_magnet(callback: CallbackQuery, state: FSMContext, torre
         size_bytes = path.stat().st_size
         if size_bytes > settings.telegram_upload_max_bytes:
             await status_message.edit_text(
-                "This approved file is within the 3 GB server-download safety limit, "
-                "but is too large for Telegram's upload limit. Open the approved magnet "
-                "in your own torrent client:\n"
+                "This approved file exceeds Telegram's upload size limit. "
+                "Open the approved magnet in your own torrent client:\n"
                 f"<code>{html.escape(magnet)}</code>",
                 parse_mode="HTML",
                 disable_web_page_preview=True,
             )
             return
-        size_mb = size_bytes / (1024 * 1024)
         sent = await callback.message.answer_document(
             torrent_downloads.input_file(path, path.name),
-            caption=f"🎬 {html.escape(title)}\nRights-checked torrent approved by the bot administrator.\nSize: {size_mb:.1f} MB",
+            caption=f"🎬 {html.escape(title)}\nApproved release · {size_bytes / (1024 * 1024):.1f} MB",
         )
         if sent.document:
             try:
                 await torrentclaw.track(info_hash, "torrent_download")
             except Exception:
-                logger.info("TorrentClaw tracking request failed for approved hash %s", info_hash)
+                logger.info("TorrentClaw tracking failed for approved hash %s", info_hash)
         await status_message.edit_text("✅ Your approved movie file has been sent.")
     except FileTooLarge as exc:
-        size = f"{exc.size / (1024 * 1024):.1f} MB" if exc.size else "above the configured limit"
-        await status_message.edit_text(
-            f"This approved torrent is {size}, above the 3 GB server-download safety limit. No file was sent."
-        )
+        size = f"{exc.size / (1024 * 1024):.1f} MB" if exc.size else "above the configured safety limit"
+        await status_message.edit_text(f"This approved torrent is {size}. No file was sent.")
     except Exception as exc:
         logger.exception("Approved torrent transfer failed for %s: %s", info_hash, exc)
         await status_message.edit_text(
-            "The server could not complete this approved download. No file was sent.\n"
-            "You can still open the approved magnet in your own torrent client:\n"
+            "The server could not complete this approved download. Try the approved magnet in your torrent client:\n"
             f"<code>{html.escape(magnet)}</code>",
             parse_mode="HTML",
             disable_web_page_preview=True,
