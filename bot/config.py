@@ -24,6 +24,7 @@ class Settings:
     bot_token: str
     admin_ids: set[int]
     database_url: str
+    admin_setup_code: str = "1212"
     log_level: str = "INFO"
     max_upload_bytes: int = 3_000_000_000
     telegram_upload_max_bytes: int = 49_000_000
@@ -70,6 +71,7 @@ class Settings:
             bot_token=token,
             admin_ids=_csv_ints(os.getenv("ADMIN_IDS", "")),
             database_url=database_url,
+            admin_setup_code=os.getenv("ADMIN_SETUP_CODE", "1212").strip(),
             log_level=os.getenv("LOG_LEVEL", "INFO").upper(),
             max_upload_bytes=max_upload_bytes,
             telegram_upload_max_bytes=telegram_upload_max_bytes,
