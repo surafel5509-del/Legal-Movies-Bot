@@ -337,6 +337,9 @@ async def send_approved_magnet(callback: CallbackQuery, state: FSMContext, torre
         return
     data = await state.get_data()
     entry = (data.get("torrentclaw_magnets") or {}).get(info_hash)
+    if data.get("torrentclaw_selected_hash") != info_hash:
+        await callback.answer("Select a quality first.", show_alert=True)
+        return
     magnet = entry.get("magnet") if isinstance(entry, dict) else None
     title = entry.get("title", "Approved movie") if isinstance(entry, dict) else "Approved movie"
     if not isinstance(magnet, str) or magnet_info_hash(magnet) != info_hash:
