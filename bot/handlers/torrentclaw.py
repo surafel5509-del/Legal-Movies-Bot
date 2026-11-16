@@ -190,17 +190,15 @@ async def _render_search(message: Message, state: FSMContext, torrentclaw, raw_q
         )
         return
 
-    approved = settings.torrentclaw_approved_infohashes or set()
-    magnet_map: dict[str, dict[str, str]] = {}
     builder = InlineKeyboardBuilder()
-    lines = [f"<b>🔎 TorrentClaw movie matches</b> · {html.escape(query[:80])}", ""]
+    movie_lookup: dict[str, dict] = {}
+    lines = [f"<b>🔎 Movie search results</b> · {html.escape(query[:80])}", ""]
     if year:
         lines[0] += f" ({year})"
     if not exact:
         lines.append("<i>Closest title matches — check the year before choosing.</i>")
         lines.append("")
-    buttons = 0
-    for item, _score in selected:
+    for index, (item, _score) in enumerate(selected):
         title_raw = str(item.get("title") or "Untitled")[:100]
         title = html.escape(title_raw)
         item_year = item.get("year")
@@ -208,49 +206,116 @@ async def _render_search(message: Message, state: FSMContext, torrentclaw, raw_q
         lines.append(f"<b>{title}</b>{f' ({item_year})' if item_year else ''}")
         if rating:
             lines.append(f"⭐ Rating: {html.escape(str(rating))}")
-        torrents = item.get("torrents") or []
-        torrents = sorted(
-            (t for t in torrents if isinstance(t, dict)),
-            key=lambda t: (_safe_int(t.get("qualityScore")), _safe_int(t.get("seeders"))),
-            reverse=True,
-        )
-        for torrent in torrents[:4]:
-            info_hash = str(torrent.get("infoHash") or "").lower()
-            quality = html.escape(str(torrent.get("quality") or "Unknown"))
-            codec = html.escape(str(torrent.get("codec") or ""))
-            size_bytes = _safe_int(torrent.get("sizeBytes"))
-            size = f"{size_bytes / (1024 ** 3):.2f} GB" if size_bytes else "size n/a"
-            seeders = _safe_int(torrent.get("seeders"))
-            score = _safe_int(torrent.get("qualityScore"))
-            lines.append(f"  • {quality} {codec} · {size} · {seeders} seeders · score {score}/100")
-            magnet = torrent.get("magnetUrl")
-            if (
-                info_hash in approved and _HASH.fullmatch(info_hash)
-                and isinstance(magnet, str) and magnet_info_hash(magnet) == info_hash
-            ):
-                magnet_map[info_hash] = {"magnet": magnet, "title": title_raw}
-                builder.row(InlineKeyboardButton(
-                    text=f"⬇️ Download approved · {quality}"[:60],
-                    callback_data=f"torrentdl:{info_hash}",
-                ))
-                buttons += 1
+        lines.append("Choose this movie to view its available qualities.")
         lines.append("")
+        key = str(index)
+        movie_lookup[key] = item
+        label = f"🎬 {title_raw}" + (f" ({item_year})" if item_year else "")
+        builder.row(InlineKeyboardButton(text=label[:60], callback_data=f"moviepick:{key}"))
 
-    await state.update_data(torrentclaw_magnets=magnet_map)
-    if not buttons:
-        lines.extend([
-            "No download button is available for these releases yet.",
-            "Downloads are activated only after an administrator independently verifies redistribution permission for the exact release and approves its info hash.",
-        ])
-    else:
-        lines.append("Download buttons are available for approved releases only.")
+    await state.update_data(torrentclaw_movies=movie_lookup, torrentclaw_magnets={}, torrentclaw_selected_hash=None)
     builder.row(InlineKeyboardButton(text="🏠 Home", callback_data="nav:home"))
     await message.answer(
-        "\n".join(lines)[:3900],
+        "\\n".join(lines)[:3900],
         reply_markup=builder.as_markup(),
         parse_mode="HTML",
         disable_web_page_preview=True,
     )
+
+
+@router.callback_query(F.data.startswith("moviepick:"))
+async def select_movie(callback: CallbackQuery, state: FSMContext):
+    key = callback.data.split(":", 1)[1]
+    data = await state.get_data()
+    item = (data.get("torrentclaw_movies") or {}).get(key)
+    if not isinstance(item, dict):
+        await callback.answer("Search again to refresh the movie list.", show_alert=True)
+        return
+
+    title_raw = str(item.get("title") or "Untitled")[:100]
+    title = html.escape(title_raw)
+    year = item.get("year")
+    rating = item.get("ratingImdb") or item.get("ratingTmdb")
+    overview = str(item.get("overview") or item.get("description") or "").strip()
+    overview = html.escape(overview[:900])
+    lines = [f"<b>🎬 {title}</b>" + (f" ({year})" if year else "")]
+    if rating:
+        lines.append(f"⭐ Rating: {html.escape(str(rating))}")
+    if overview:
+        lines.extend(["", overview])
+
+    approved = settings.torrentclaw_approved_infohashes or set()
+    magnet_map: dict[str, dict[str, str]] = {}
+    builder = InlineKeyboardBuilder()
+    torrents = item.get("torrents") or []
+    torrents = sorted(
+        (t for t in torrents if isinstance(t, dict)),
+        key=lambda t: (_safe_int(t.get("qualityScore")), _safe_int(t.get("seeders"))),
+        reverse=True,
+    )
+    for torrent in torrents[:12]:
+        info_hash = str(torrent.get("infoHash") or "").lower()
+        quality_raw = str(torrent.get("quality") or "Unknown")
+        quality = html.escape(quality_raw)
+        codec = html.escape(str(torrent.get("codec") or ""))
+        size_bytes = _safe_int(torrent.get("sizeBytes"))
+        size = f"{size_bytes / (1024 ** 3):.2f} GB" if size_bytes else "size n/a"
+        seeders = _safe_int(torrent.get("seeders"))
+        lines.append(f"• {quality} {codec} · {size} · {seeders} seeders")
+        magnet = torrent.get("magnetUrl")
+        if (
+            info_hash in approved and _HASH.fullmatch(info_hash)
+            and isinstance(magnet, str) and magnet_info_hash(magnet) == info_hash
+        ):
+            magnet_map[info_hash] = {"magnet": magnet, "title": title_raw, "quality": quality_raw}
+            builder.row(InlineKeyboardButton(
+                text=f"🎞 Select quality · {quality_raw}"[:60],
+                callback_data=f"torrentquality:{info_hash}",
+            ))
+
+    if not torrents:
+        lines.extend(["", "No release qualities are listed for this movie yet."])
+    elif not magnet_map:
+        lines.extend([
+            "",
+            "No quality can be downloaded yet. Downloads are enabled only for exact releases whose redistribution permission has been independently verified and approved.",
+        ])
+    else:
+        lines.extend(["", "<b>Choose an approved quality below.</b>"])
+
+    await state.update_data(torrentclaw_magnets=magnet_map, torrentclaw_selected_hash=None)
+    builder.row(InlineKeyboardButton(text="⬅️ Back to movie results", callback_data="nav:torrent"))
+    builder.row(InlineKeyboardButton(text="🏠 Home", callback_data="nav:home"))
+    await callback.message.answer("\\n".join(lines)[:3900], reply_markup=builder.as_markup(), parse_mode="HTML")
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("torrentquality:"))
+async def select_torrent_quality(callback: CallbackQuery, state: FSMContext):
+    info_hash = callback.data.split(":", 1)[1].lower()
+    data = await state.get_data()
+    entry = (data.get("torrentclaw_magnets") or {}).get(info_hash)
+    if (
+        not _HASH.fullmatch(info_hash)
+        or info_hash not in (settings.torrentclaw_approved_infohashes or set())
+        or not isinstance(entry, dict)
+    ):
+        await callback.answer("This quality is not approved. Search and select the movie again.", show_alert=True)
+        return
+
+    await state.update_data(torrentclaw_selected_hash=info_hash)
+    builder = InlineKeyboardBuilder()
+    builder.button(text="⬇️ Download selected movie", callback_data=f"torrentdl:{info_hash}")
+    builder.button(text="⬅️ Choose another quality", callback_data="moviepick:0")
+    builder.adjust(1)
+    await callback.message.answer(
+        f"Selected: <b>{html.escape(entry.get('title', 'Movie'))}</b>\n"
+        f"Quality: <b>{html.escape(entry.get('quality', 'Unknown'))}</b>\n\n"
+        "Press Download to receive this approved release.",
+        reply_markup=builder.as_markup(),
+        parse_mode="HTML",
+    )
+    await callback.answer("Quality selected")
 
 
 @router.callback_query(F.data.startswith("torrentdl:"))
