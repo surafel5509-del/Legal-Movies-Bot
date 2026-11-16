@@ -22,7 +22,8 @@ def home_keyboard() -> InlineKeyboardMarkup:
 
 
 @router.message(CommandStart())
-async def start(message: Message):
+async def start(message: Message, state):
+    await state.clear()
     await message.answer(WELCOME, reply_markup=home_keyboard(), parse_mode="HTML")
 
 
