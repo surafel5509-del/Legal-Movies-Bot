@@ -118,8 +118,8 @@ async def send_approved_magnet(callback: CallbackQuery, state: FSMContext, torre
         except Exception:
             logger.info("TorrentClaw tracking request failed for approved hash %s", info_hash)
         await callback.message.answer(
-            "⬇️ <b>Approved torrent magnet</b>\\n"
-            "Server-side downloads are disabled. Open this link in a compatible torrent client:\\n"
+            "⬇️ <b>Approved torrent magnet</b>\n"
+            "Server-side downloads are disabled. Open this link in a compatible torrent client:\n"
             f"<code>{html.escape(magnet)}</code>",
             parse_mode="HTML",
             disable_web_page_preview=True,
@@ -135,7 +135,7 @@ async def send_approved_magnet(callback: CallbackQuery, state: FSMContext, torre
         size_mb = path.stat().st_size / (1024 * 1024)
         sent = await callback.message.answer_document(
             torrent_downloads.input_file(path, path.name),
-            caption=f"🎬 {html.escape(title)}\\nRights-checked torrent approved by the bot administrator.\\nSize: {size_mb:.1f} MB",
+            caption=f"🎬 {html.escape(title)}\nRights-checked torrent approved by the bot administrator.\nSize: {size_mb:.1f} MB",
         )
         if sent.document:
             try:
@@ -148,11 +148,11 @@ async def send_approved_magnet(callback: CallbackQuery, state: FSMContext, torre
         await status_message.edit_text(
             f"This approved torrent is {size}, above the bot's Telegram upload limit. No file was sent."
         )
-    except (TorrentDownloadError, Exception) as exc:
+    except Exception as exc:
         logger.exception("Approved torrent transfer failed for %s: %s", info_hash, exc)
         await status_message.edit_text(
-            "The server could not complete this approved download. No file was sent.\\n"
-            "You can still open the approved magnet in your own torrent client:\\n"
+            "The server could not complete this approved download. No file was sent.\n"
+            "You can still open the approved magnet in your own torrent client:\n"
             f"<code>{html.escape(magnet)}</code>",
             parse_mode="HTML",
             disable_web_page_preview=True,
