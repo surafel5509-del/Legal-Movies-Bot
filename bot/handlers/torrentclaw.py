@@ -13,7 +13,6 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from bot.config import settings
 from bot.services.torrentclaw_api import TorrentClawError
 from bot.services.download_manager import FileTooLarge
-from bot.services.torrent_download_manager import TorrentDownloadError
 
 router = Router()
 logger = logging.getLogger(__name__)
