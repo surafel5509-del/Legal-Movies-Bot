@@ -76,7 +76,6 @@ async def main() -> None:
     downloads_manager = DownloadManager()
     downloads_manager.session = http
     torrent_downloads = TorrentDownloadManager(http)
-    await torrent_downloads.start()
 
     dp["archive"] = archive
     dp["tmdb"] = TMDBAPI(http) if settings.tmdb_api_key else None
@@ -90,6 +89,7 @@ async def main() -> None:
         dp.include_router(router)
 
     try:
+        await torrent_downloads.start()
         await bot.set_my_commands([
             BotCommand(command="start", description="Open the movie bot"),
             BotCommand(command="search", description="Search licensed catalogs"),
