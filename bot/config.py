@@ -25,7 +25,8 @@ class Settings:
     admin_ids: set[int]
     database_url: str
     log_level: str = "INFO"
-    max_upload_bytes: int = 49 * 1024 * 1024
+    max_upload_bytes: int = 3 * 1024 * 1024 * 1024
+    telegram_upload_max_bytes: int = 49 * 1024 * 1024
     max_concurrent_downloads: int = 2
     archive_page_size: int = 10
     cache_ttl_seconds: int = 600
@@ -51,15 +52,17 @@ class Settings:
             database_url = database_url.replace("postgres://", "postgresql+asyncpg://", 1)
         elif database_url.startswith("postgresql://") and "+asyncpg" not in database_url:
             database_url = database_url.replace("postgresql://", "postgresql+asyncpg://", 1)
-        max_upload_bytes = int(os.getenv("MAX_UPLOAD_BYTES", 49 * 1024 * 1024))
-        if max_upload_bytes < 1:
-            raise ValueError("MAX_UPLOAD_BYTES must be a positive integer")
+        max_upload_bytes = int(os.getenv("MAX_UPLOAD_BYTES", 3 * 1024 * 1024 * 1024))
+        telegram_upload_max_bytes = int(os.getenv("TELEGRAM_UPLOAD_MAX_BYTES", 49 * 1024 * 1024))
+        if max_upload_bytes < 1 or telegram_upload_max_bytes < 1:
+            raise ValueError("Download and Telegram upload limits must be positive integers")
         return cls(
             bot_token=token,
             admin_ids=_csv_ints(os.getenv("ADMIN_IDS", "")),
             database_url=database_url,
             log_level=os.getenv("LOG_LEVEL", "INFO").upper(),
             max_upload_bytes=max_upload_bytes,
+            telegram_upload_max_bytes=telegram_upload_max_bytes,
             max_concurrent_downloads=max(1, int(os.getenv("MAX_CONCURRENT_DOWNLOADS", "2"))),
             archive_page_size=max(1, min(50, int(os.getenv("ARCHIVE_PAGE_SIZE", "10")))),
             cache_ttl_seconds=max(30, int(os.getenv("CACHE_TTL_SECONDS", "600"))),
