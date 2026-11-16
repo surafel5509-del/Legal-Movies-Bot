@@ -52,6 +52,16 @@ class Settings:
             database_url = database_url.replace("postgres://", "postgresql+asyncpg://", 1)
         elif database_url.startswith("postgresql://") and "+asyncpg" not in database_url:
             database_url = database_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+
+        # Railway mounts persistent volumes at RAILWAY_VOLUME_MOUNT_PATH.
+        # Keep explicitly configured absolute SQLite paths and all PostgreSQL URLs,
+        # but move relative SQLite paths onto the persistent volume.
+        volume_path = os.getenv("RAILWAY_VOLUME_MOUNT_PATH", "").strip()
+        if database_url.startswith("sqlite+") and ":memory:" not in database_url and volume_path:
+            sqlite_location = database_url.split("///", 1)[-1].split("?", 1)[0]
+            if sqlite_location and not Path(sqlite_location).is_absolute():
+                database_url = f"sqlite+aiosqlite:///{Path(volume_path) / 'bot.db'}"
+
         max_upload_bytes = int(os.getenv("MAX_UPLOAD_BYTES", 3 * 1024 * 1024 * 1024))
         telegram_upload_max_bytes = int(os.getenv("TELEGRAM_UPLOAD_MAX_BYTES", 49 * 1024 * 1024))
         if max_upload_bytes < 1 or telegram_upload_max_bytes < 1:
