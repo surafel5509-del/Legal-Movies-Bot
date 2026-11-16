@@ -213,14 +213,25 @@ async def _render_search(message: Message, state: FSMContext, torrentclaw, raw_q
         label = f"🎬 {title_raw}" + (f" ({item_year})" if item_year else "")
         builder.row(InlineKeyboardButton(text=label[:60], callback_data=f"moviepick:{key}"))
 
-    await state.update_data(torrentclaw_movies=movie_lookup, torrentclaw_magnets={}, torrentclaw_selected_hash=None)
+    await state.update_data(torrentclaw_movies=movie_lookup, torrentclaw_magnets={}, torrentclaw_selected_hash=None, torrentclaw_search_query=raw_query)
     builder.row(InlineKeyboardButton(text="🏠 Home", callback_data="nav:home"))
     await message.answer(
-        "\\n".join(lines)[:3900],
+        "\n".join(lines)[:3900],
         reply_markup=builder.as_markup(),
         parse_mode="HTML",
         disable_web_page_preview=True,
     )
+
+
+@router.callback_query(F.data == "torrentback")
+async def back_to_movie_results(callback: CallbackQuery, state: FSMContext, torrentclaw):
+    data = await state.get_data()
+    query = data.get("torrentclaw_search_query")
+    if not isinstance(query, str) or len(query.strip()) < 2:
+        await callback.answer("Run /torrent to search again.", show_alert=True)
+        return
+    await callback.answer()
+    await _render_search(callback.message, state, torrentclaw, query)
 
 
 @router.callback_query(F.data.startswith("moviepick:"))
@@ -284,9 +295,9 @@ async def select_movie(callback: CallbackQuery, state: FSMContext):
         lines.extend(["", "<b>Choose an approved quality below.</b>"])
 
     await state.update_data(torrentclaw_magnets=magnet_map, torrentclaw_selected_hash=None, torrentclaw_selected_movie_key=key)
-    builder.row(InlineKeyboardButton(text="⬅️ Back to movie results", callback_data="nav:torrent"))
+    builder.row(InlineKeyboardButton(text="⬅️ Back to movie results", callback_data="torrentback"))
     builder.row(InlineKeyboardButton(text="🏠 Home", callback_data="nav:home"))
-    await callback.message.answer("\\n".join(lines)[:3900], reply_markup=builder.as_markup(), parse_mode="HTML")
+    await callback.message.answer("\n".join(lines)[:3900], reply_markup=builder.as_markup(), parse_mode="HTML")
     await callback.answer()
 
 
