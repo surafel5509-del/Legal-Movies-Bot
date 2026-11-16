@@ -1,5 +1,6 @@
 from aiogram import F, Router
 from aiogram.filters import Command, CommandStart
+from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
 router = Router()
@@ -22,7 +23,7 @@ def home_keyboard() -> InlineKeyboardMarkup:
 
 
 @router.message(CommandStart())
-async def start(message: Message, state):
+async def start(message: Message, state: FSMContext):
     await state.clear()
     await message.answer(WELCOME, reply_markup=home_keyboard(), parse_mode="HTML")
 
