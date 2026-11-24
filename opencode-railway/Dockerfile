@@ -12,6 +12,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY --from=caddy /usr/bin/caddy /usr/bin/caddy
 COPY entrypoint.py /opt/railway/entrypoint.py
+COPY api_gateway.py /opt/railway/api_gateway.py
 RUN mkdir -p /etc/opencode
 COPY opencode.json /etc/opencode/opencode.json
 
