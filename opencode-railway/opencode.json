@@ -6,7 +6,11 @@
       "package": "@opencode/ai/providers/openrouter",
       "models": {
         "z-ai/glm-5.3-flash": {
-          "name": "Your AI — GLM 5.3 Flash"
+          "name": "Your AI — GLM 5.3 Flash",
+          "limit": {
+            "context": 1000000,
+            "output": 4096
+          }
         }
       }
     }
