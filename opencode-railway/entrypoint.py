@@ -10,11 +10,11 @@ import time
 
 
 def prepare():
-    password = os.environ.get("OPENCODE_SERVER_PASSWORD", "")
-    username = os.environ.get("OPENCODE_SERVER_USERNAME", "opencode")
+    password = os.environ.get("OPENCODE_PASSWORD") or os.environ.get("OPENCODE_SERVER_PASSWORD", "")
+    username = "opencode"  # OpenCode 2 uses a fixed Basic Auth username.
     if len(password) < 16:
         raise ValueError("Set OPENCODE_SERVER_PASSWORD to a unique password of at least 16 characters.")
-    if not username or ":" in username or any(c in username + password for c in "\r\n\x00"):
+    if any(c in username + password for c in "\r\n\x00"):
         raise ValueError("Invalid OpenCode authentication settings.")
     port = int(os.environ.get("PORT", "8080"))
     if not 1 <= port <= 65535 or port == 4096:
@@ -29,7 +29,8 @@ def prepare():
             os.chown(path, 1000, 1000)
     os.environ.update(HOME="/data/home", XDG_DATA_HOME="/data/xdg/data",
                       XDG_CONFIG_HOME="/data/xdg/config", XDG_STATE_HOME="/data/xdg/state",
-                      XDG_CACHE_HOME="/data/xdg/cache", OPENCODE_SERVER_USERNAME=username)
+                      XDG_CACHE_HOME="/data/xdg/cache", OPENCODE_PASSWORD=password,
+                      OPENCODE_SERVER_USERNAME=username, OPENCODE_SERVER_PASSWORD=password)
     auth = "Basic " + base64.b64encode((username + ":" + password).encode()).decode()
     proxy = {"handler": "reverse_proxy", "upstreams": [{"dial": "127.0.0.1:4096"}], "flush_interval": -1}
     health_proxy = dict(proxy, headers={"request": {"set": {"Authorization": [auth]}}})
@@ -64,9 +65,9 @@ def main():
     signal.signal(signal.SIGTERM, stop)
     signal.signal(signal.SIGINT, stop)
     try:
-        children.append(subprocess.Popen(["opencode", "web", "--hostname", "127.0.0.1", "--port", "4096"], cwd="/data/workspace"))
+        children.append(subprocess.Popen(["opencode", "serve", "--hostname", "127.0.0.1", "--port", "4096"], cwd="/data/workspace"))
         children.append(subprocess.Popen(["caddy", "run", "--config", config]))
-        print("OpenCode web starting. Workspace: /data/workspace; persistent state: /data/xdg", flush=True)
+        print("OpenCode v2 web server starting. Workspace: /data/workspace; persistent state: /data/xdg", flush=True)
         while not stopping and all(p.poll() is None for p in children):
             time.sleep(0.25)
         result = 0 if stopping else next((p.returncode or 1 for p in children if p.poll() is not None), 1)
