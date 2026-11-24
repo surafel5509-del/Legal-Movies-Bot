@@ -127,7 +127,12 @@ class Handler(BaseHTTPRequestHandler):
         return token_valid(header[7:].strip())
 
     def do_OPTIONS(self):
-        self.send_json(204, {})
+        self.send_response(204)
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Headers", "Authorization, Content-Type")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
+        self.send_header("Content-Length", "0")
+        self.end_headers()
 
     def do_GET(self):
         parsed = urlsplit(self.path)
@@ -216,7 +221,7 @@ class Handler(BaseHTTPRequestHandler):
                 if not isinstance(message, str) or not message.strip() or len(message) > 50000:
                     self.send_json(400, {"error": "invalid_message", "message": "message must be 1-50000 characters"})
                     return
-                payload = {"parts": [{"type": "text", "text": message}]}
+                payload = {"text": message}
                 agent = body.get("agent")
                 if isinstance(agent, str) and re.fullmatch(r"[A-Za-z0-9_-]{1,80}", agent):
                     payload["agent"] = agent
