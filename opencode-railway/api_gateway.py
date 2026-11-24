@@ -154,6 +154,9 @@ class Handler(BaseHTTPRequestHandler):
                 suffix = "?" + urlencode(params) if params else ""
                 self.proxy("GET", "/api/session" + suffix)
                 return
+            if path == "/v1/sessions/active":
+                self.proxy("GET", "/api/session/active")
+                return
             if path == "/v1/agents":
                 self.proxy("GET", "/api/agent")
                 return
